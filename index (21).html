@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zoe's Dream Haven</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
+button{cursor:pointer;font-family:inherit}
+button:hover{opacity:.88}
+
+/* ── Layout ── */
+#app{display:flex;min-height:100vh}
+#sidebar{width:230px;background:linear-gradient(180deg,#000 0%,#0a0a0a 60%,#150508 100%);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:200;transition:transform .25s ease;box-shadow:4px 0 24px rgba(0,0,0,.3)}
+#main{flex:1;margin-left:230px;display:flex;flex-direction:column;min-height:100vh}
+#overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:190}
+
+/* ── Sidebar ── */
+.brand{display:flex;align-items:center;gap:12px;padding:24px 18px 20px;border-bottom:2px solid;border-image:linear-gradient(90deg,#dc0a2d,#f0b429) 1}
+.brand-icon{font-size:26px}
+.brand-name{font-weight:800;font-size:15px;color:#fff;line-height:1.2}
+.brand-sub{font-size:10px;color:#dc0a2d;text-transform:uppercase;letter-spacing:.1em;font-weight:600}
+.nav-list{flex:1;padding:12px 10px;overflow-y:auto}
+.nav-btn{display:flex;align-items:center;gap:11px;width:100%;padding:11px 14px;border-radius:10px;border:none;background:transparent;color:#9ca3af;font-size:13px;font-weight:500;margin-bottom:2px;text-align:left;transition:all .15s}
+.nav-btn:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-btn.active{background:#dc0a2d;color:#fff;font-weight:600}
+.nav-btn .ni{font-size:16px;width:20px;text-align:center}
+.sidebar-foot{padding:14px 18px;font-size:10px;color:rgba(255,255,255,.2);border-top:1px solid rgba(255,255,255,.06)}
+
+/* ── Topbar ── */
+#topbar{background:#fff;border-bottom:1px solid #e5e7eb;padding:0 22px;height:60px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100;box-shadow:0 1px 6px rgba(0,0,0,.06)}
+.hamburger{display:none;flex-direction:column;gap:5px;background:none;border:none;padding:6px}
+.hamburger span{display:block;width:22px;height:2px;background:#111;border-radius:2px}
+.page-title{flex:1;font-size:16px;font-weight:700;color:#111}
+.page-brand{font-size:12px;color:#dc0a2d;font-weight:600}
+.date-chip{font-size:11px;color:#6b7280;background:#f3f4f6;padding:5px 12px;border-radius:20px}
+
+/* ── Content ── */
+#content{flex:1;padding:22px}
+
+/* ── Welcome Banner ── */
+.welcome-banner{background:linear-gradient(135deg,#dc0a2d 0%,#c70726 60%,#a80724 100%);border-radius:16px;padding:26px 30px;margin-bottom:22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;box-shadow:0 8px 32px rgba(220,10,45,.35);position:relative;overflow:hidden;border:2px solid #000}
+.welcome-watermark{position:absolute;right:-10px;bottom:-14px;width:200px;height:auto;opacity:.16;pointer-events:none}
+.welcome-content{position:relative;z-index:1}
+.welcome-stat{position:relative;z-index:1}
+.welcome-title{color:#fff;font-size:22px;font-weight:800;margin-bottom:5px;text-shadow:0 2px 8px rgba(0,0,0,.2)}
+.welcome-sub{color:#fff;font-size:13px;font-weight:600;letter-spacing:.02em;background:#000;display:inline-block;padding:3px 12px;border-radius:20px}
+.welcome-stat{text-align:right}
+.welcome-stat-label{color:rgba(255,255,255,.85);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;font-weight:700}
+.welcome-stat-value{color:#fff;font-size:32px;font-weight:800;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,.25)}
+.welcome-stat-note{color:rgba(255,255,255,.8);font-size:11px;margin-top:4px;font-weight:500}
+
+/* ── Stat Cards ── */
+.card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:22px}
+.stat-card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 4px 18px rgba(0,0,0,.1);display:flex;align-items:center;gap:14px;border-left:5px solid #dc0a2d;transition:transform .2s,box-shadow .2s}
+.stat-card:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(0,0,0,.16)}
+.stat-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;background:#fff1f2}
+.stat-value{font-size:21px;font-weight:800;color:#0a0a0a;letter-spacing:-.01em}
+.stat-label{font-size:11px;color:#6b7280;margin-top:3px;font-weight:500}
+
+/* ── Quick Actions ── */
+.quick-actions{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:22px}
+.qa-btn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;padding:9px 16px;font-size:13px;font-weight:600;color:#111;transition:all .15s;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.qa-btn:hover{background:#dc0a2d;color:#fff;border-color:#dc0a2d;transform:translateY(-1px)}
+
+/* ── Charts ── */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px}
+.chart-box{background:#fff;border-radius:14px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,.07)}
+.chart-title{font-size:13px;font-weight:700;color:#111;margin-bottom:14px}
+.bar-chart{display:flex;align-items:flex-end;gap:8px;height:100px}
+.bar-wrap{display:flex;flex-direction:column;align-items:center;flex:1;gap:4px}
+.bar{background:linear-gradient(180deg,#dc0a2d,#7a0a1f);border-radius:6px 6px 0 0;width:100%;min-height:4px;transition:height .4s}
+.bar-label{font-size:10px;color:#9ca3af;font-weight:500}
+.bar-val{font-size:10px;color:#dc0a2d;font-weight:700}
+.donut-wrap{display:flex;align-items:center;gap:16px}
+.donut-legend{display:flex;flex-direction:column;gap:7px}
+.legend-item{display:flex;align-items:center;gap:7px;font-size:12px;color:#374151}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* ── Panel ── */
+.panel{background:#fff;border-radius:14px;padding:20px;box-shadow:0 4px 18px rgba(0,0,0,.09);margin-bottom:18px;overflow-x:auto;border:1px solid #f3f4f6}
+.panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;font-weight:700;color:#111;font-size:14px}
+.panel-brand{font-size:11px;color:#dc0a2d;font-weight:600}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* ── Table ── */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;border-bottom:2px solid #f3f4f6;white-space:nowrap}
+td{padding:10px 10px;border-bottom:1px solid #f9fafb;font-size:13px;vertical-align:middle}
+tr:hover td{background:#fef2f2}
+
+/* ── Badges ── */
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:#dbeafe;color:#1e40af}
+.badge.red{background:#fee2e2;color:#dc2626}
+.badge.green{background:#d1fae5;color:#065f46}
+.badge.yellow{background:#fef3c7;color:#92400e}
+.badge.grey{background:#f3f4f6;color:#374151}
+.chip{display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;background:#f3f4f6;color:#374151}
+
+/* ── Buttons ── */
+.btn-red{display:inline-flex;align-items:center;gap:7px;background:#dc0a2d;color:#fff;border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(220,10,45,.3);transition:all .15s}
+.btn-red:hover{background:#a80724;transform:translateY(-1px)}
+.btn-black{display:inline-flex;align-items:center;gap:7px;background:#111;color:#fff;border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;transition:all .15s}
+.btn-black:hover{background:#333}
+.btn-outline{display:inline-flex;align-items:center;gap:7px;background:#fff;color:#111;border:1.5px solid #e5e7eb;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:600;transition:all .15s}
+.btn-outline:hover{border-color:#dc0a2d;color:#dc0a2d}
+.btn-icon{background:none;border:none;color:#dc0a2d;padding:4px 6px;border-radius:6px;font-size:15px;transition:all .15s}
+.btn-icon:hover{background:#fee2e2}
+.btn-icon.dark{color:#374151}
+.btn-link{background:none;border:none;color:#dc0a2d;font-size:12px;font-weight:600}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px;flex-wrap:wrap}
+.search-box{display:flex;align-items:center;gap:8px;background:#fff;border-radius:10px;padding:9px 14px;box-shadow:0 1px 4px rgba(0,0,0,.07);flex:1;max-width:340px;border:1.5px solid #f3f4f6}
+.search-box:focus-within{border-color:#dc0a2d}
+.search-box input{border:none;outline:none;font-size:13px;flex:1;color:#111;background:transparent}
+
+/* ── Modal ── */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-box{background:#fff;border-radius:16px;width:100%;max-width:500px;box-shadow:0 24px 60px rgba(0,0,0,.3);max-height:92vh;overflow-y:auto}
+.modal-head{display:flex;justify-content:space-between;align-items:center;padding:20px 22px 16px;border-bottom:2px solid #f3f4f6}
+.modal-title{font-size:16px;font-weight:800;color:#111}
+.modal-brand{font-size:11px;color:#dc0a2d;font-weight:600}
+.modal-body{padding:20px 22px 24px}
+.close-btn{background:none;border:none;color:#9ca3af;font-size:20px;line-height:1;padding:3px 6px;border-radius:6px}
+.close-btn:hover{background:#fee2e2;color:#dc0a2d}
+.form-row{margin-bottom:14px}
+.form-label{display:block;font-size:11px;font-weight:700;color:#374151;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+.form-input{width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px;color:#111;outline:none;background:#fafafa;font-family:inherit;transition:border .15s}
+.form-input:focus{border-color:#dc0a2d;background:#fff}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.total-box{background:#fff1f2;border:1.5px solid #fecdd3;border-radius:10px;padding:12px 16px;margin:10px 0}
+.alert-row{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #f9fafb;font-size:13px}
+
+/* ── Receipt Print ── */
+.receipt-preview{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px;margin:14px 0;font-size:13px}
+.receipt-preview h3{text-align:center;font-size:15px;font-weight:800;margin-bottom:2px}
+.receipt-preview .r-sub{text-align:center;font-size:11px;color:#6b7280;margin-bottom:10px}
+.receipt-preview .r-divider{border-top:1px dashed #d1d5db;margin:8px 0}
+.receipt-preview .r-row{display:flex;justify-content:space-between;font-size:12px;padding:2px 0}
+.receipt-preview .r-total{display:flex;justify-content:space-between;font-weight:800;font-size:14px;padding:6px 0}
+
+/* ── Stock bar ── */
+.stock-bar-wrap{background:#f3f4f6;border-radius:20px;height:6px;flex:1;overflow:hidden}
+.stock-bar{background:linear-gradient(90deg,#dc0a2d,#7a0a1f);height:100%;border-radius:20px;transition:width .4s}
+
+@media print{
+  #sidebar,#topbar,.toolbar,.btn-red,.btn-black,.btn-outline,.close-btn,#modal{display:none!important}
+  #main{margin-left:0}
+  .modal-backdrop{position:static;background:none;padding:0}
+  .modal-box{box-shadow:none;max-height:none}
+}
+
+/* ── Responsive: Tablet & Mobile ── */
+@media(max-width:1024px){
+  .card-grid{grid-template-columns:1fr 1fr 1fr}
+}
+@media(max-width:900px){
+  .card-grid{grid-template-columns:1fr 1fr}
+  .chart-grid{grid-template-columns:1fr}
+  .two-col{grid-template-columns:1fr}
+  .grid-3{grid-template-columns:1fr 1fr}
+}
+@media(max-width:768px){
+  #sidebar{transform:translateX(-100%);width:240px}
+  #sidebar.open{transform:translateX(0)}
+  #main{margin-left:0}
+  .hamburger{display:flex}
+  .card-grid{grid-template-columns:1fr 1fr}
+  #content{padding:14px}
+  .welcome-banner{padding:18px;flex-direction:column;align-items:flex-start}
+  .welcome-watermark{display:none}
+  .welcome-stat{text-align:left}
+  #topbar{padding:0 14px;gap:10px}
+  .page-brand{display:none}
+  .date-chip{display:none}
+  .page-title{font-size:15px}
+  .grid-2{grid-template-columns:1fr}
+  .grid-3{grid-template-columns:1fr}
+  .modal-box{max-width:100%;margin:0 4px}
+  .toolbar{flex-direction:column;align-items:stretch}
+  .search-box{max-width:none}
+  table{font-size:12px}
+  th,td{padding:8px 6px}
+}
+@media(max-width:480px){
+  .card-grid{grid-template-columns:1fr}
+  .stat-card{padding:16px}
+  .welcome-title{font-size:18px}
+  .welcome-stat-value{font-size:24px}
+  .quick-actions{gap:8px}
+  .qa-btn{flex:1;justify-content:center;min-width:calc(50% - 8px);font-size:12px;padding:9px 10px}
+  .bar-chart{height:80px}
+  .panel{padding:14px}
+  .modal-head{padding:16px 16px 12px}
+  .modal-body{padding:16px}
+}
+@media(max-width:360px){
+  .card-grid{grid-template-columns:1fr}
+  table{font-size:11px}
+}
+
+/* Touch-friendly tap targets on tablet/mobile */
+@media(max-width:1024px) and (pointer:coarse){
+  .nav-btn{padding:13px 14px}
+  .btn-icon{padding:8px 10px;font-size:17px}
+  .btn-red,.btn-black,.btn-outline,.qa-btn{padding:11px 18px}
+  .form-input{padding:12px 14px;font-size:14px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- Sidebar -->
+<aside id="sidebar">
+  <div class="brand">
+    <div class="brand-icon">🛏️</div>
+    <div>
+      <div class="brand-name">Zoe's Dream Haven</div>
+      <div class="brand-sub">Operations Dashboard</div>
+    </div>
+  </div>
+  <nav class="nav-list" id="navList"></nav>
+  <div class="sidebar-foot">Zoe's Dream Haven © 2025</div>
+</aside>
+
+<div id="overlay" onclick="closeSidebar()"></div>
+
+<!-- Main -->
+<div id="main">
+  <header id="topbar">
+    <button class="hamburger" onclick="toggleSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <span class="page-title" id="pageTitle">Dashboard</span>
+    <span class="page-brand" id="pageBrand">Zoe's Dream Haven Dashboard</span>
+    <span class="date-chip" id="dateChip"></span>
+  </header>
+  <main id="content"></main>
+</div>
+
+</div>
+<div id="modal"></div>
+
+<script>
+// ══════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════
+let products = [
+  {id:1,name:"King Bed Frame",cat:"Beds",supplier:"Sealy SA",cost:3200,price:5800,stock:8},
+  {id:2,name:"Queen Divan Base",cat:"Beds",supplier:"Restonic",cost:1800,price:3200,stock:12},
+  {id:3,name:"Single Mattress Foam",cat:"Mattresses",supplier:"Sealy SA",cost:600,price:1100,stock:3},
+  {id:4,name:"Orthopedic Queen Mattress",cat:"Mattresses",supplier:"Edblo",cost:2400,price:4200,stock:6},
+  {id:5,name:"Velvet Headboard Navy",cat:"Headboards",supplier:"Local Craft",cost:900,price:1600,stock:4},
+  {id:6,name:"King Linen Set",cat:"Accessories",supplier:"Home Linen Co",cost:350,price:680,stock:22},
+  {id:7,name:"Pillow Top Mattress",cat:"Mattresses",supplier:"Edblo",cost:1900,price:3400,stock:2},
+];
+let customers = [
+  {id:1,name:"Thandi Nkosi",phone:"071 234 5678",email:"thandi@email.com"},
+  {id:2,name:"Rajesh Pillay",phone:"082 987 6543",email:"rajesh@email.com"},
+  {id:3,name:"Sarah van der Berg",phone:"060 111 2233",email:"sarah@email.com"},
+  {id:4,name:"Monde Dlamini",phone:"073 445 6677",email:""},
+];
+let suppliers = [
+  {id:1,name:"Sealy SA",contact:"John Smith",phone:"011 222 3344",email:"orders@sealysa.co.za"},
+  {id:2,name:"Restonic",contact:"Lisa Botha",phone:"021 333 4455",email:"info@restonic.co.za"},
+  {id:3,name:"Edblo",contact:"Pieter van Wyk",phone:"031 555 6677",email:"sales@edblo.co.za"},
+  {id:4,name:"Local Craft",contact:"Zanele Mokoena",phone:"083 777 8899",email:""},
+];
+let sales = [
+  {id:1,date:"2025-06-28",customer:"Thandi Nkosi",items:[{product:"King Bed Frame",qty:1,price:5800}],total:5800,method:"Card",receiptNum:"ZDH-001"},
+  {id:2,date:"2025-06-28",customer:"Walk-in",items:[{product:"Single Mattress Foam",qty:2,price:1100}],total:2200,method:"Cash",receiptNum:"ZDH-002"},
+  {id:3,date:"2025-06-27",customer:"Rajesh Pillay",items:[{product:"Orthopedic Queen Mattress",qty:1,price:4200}],total:4200,method:"EFT"},
+  {id:4,date:"2025-06-26",customer:"Sarah van der Berg",items:[{product:"Velvet Headboard Navy",qty:2,price:1600}],total:3200,method:"Cash"},
+  {id:5,date:"2025-06-25",customer:"Monde Dlamini",items:[{product:"Queen Divan Base",qty:1,price:3200}],total:3200,method:"Card"},
+  {id:6,date:"2025-06-24",customer:"Walk-in",items:[{product:"King Linen Set",qty:3,price:680}],total:2040,method:"Cash"},
+  {id:7,date:"2025-06-23",customer:"Thandi Nkosi",items:[{product:"Pillow Top Mattress",qty:1,price:3400}],total:3400,method:"EFT"},
+];
+let receipts = [
+  {id:1,num:"ZDH-001",date:"2025-06-28",customer:"Thandi Nkosi",phone:"071 234 5678",items:[{product:"King Bed Frame",qty:1,price:5800}],total:5800,method:"Card",status:"Paid in Full"},
+  {id:2,num:"ZDH-002",date:"2025-06-28",customer:"Walk-in",phone:"",items:[{product:"Single Mattress Foam",qty:2,price:1100}],total:2200,method:"Cash",status:"Paid in Full"},
+];
+let deliveries = [
+  {id:1,customer:"Thandi Nkosi",address:"12 Oak St, Durban",date:"2025-06-30",driver:"Sipho M",status:"Pending"},
+  {id:2,customer:"Monde Dlamini",address:"45 Pine Rd, PMB",date:"2025-06-29",driver:"David K",status:"Delivered"},
+  {id:3,customer:"Sarah van der Berg",address:"88 Palm Ave, Hillcrest",date:"2025-07-02",driver:"Sipho M",status:"Pending"},
+];
+let receiptCounter = 3;
+let settings = {name:"Zoe's Dream Haven",phone:"031 555 0000",email:"info@zoesdreamhaven.co.za",address:"123 Bed Street, Durban, KZN"};
+
+// ══════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════
+const fmt  = n => "R " + Number(n).toLocaleString("en-ZA",{minimumFractionDigits:2});
+const today = () => new Date().toISOString().slice(0,10);
+const v    = id => { const el=document.getElementById(id); return el?el.value:""; };
+const $    = id => document.getElementById(id);
+let currentPage = "dashboard";
+let searchVal   = "";
+
+const pages = [
+  {id:"dashboard", label:"Dashboard",  icon:"📊"},
+  {id:"inventory", label:"Inventory",  icon:"📦"},
+  {id:"sales",     label:"Sales",      icon:"🛒"},
+  {id:"receipts",  label:"Receipts",   icon:"🧾"},
+  {id:"customers", label:"Customers",  icon:"👥"},
+  {id:"suppliers", label:"Suppliers",  icon:"🏭"},
+  {id:"deliveries",label:"Deliveries", icon:"🚚"},
+  {id:"reports",   label:"Reports",    icon:"📈"},
+  {id:"settings",  label:"Settings",   icon:"⚙️"},
+];
+
+function renderNav(){
+  $("navList").innerHTML = pages.map(p =>
+    `<button class="nav-btn ${currentPage===p.id?'active':''}" onclick="goPage('${p.id}')">
+      <span class="ni">${p.icon}</span> Zoe's ${p.label==="Dashboard"?"Dream Haven":""} ${p.label}
+    </button>`
+  ).join("");
+}
+
+function goPage(p){
+  currentPage=p; searchVal="";
+  const pg = pages.find(x=>x.id===p);
+  $("pageTitle").textContent = pg.label;
+  $("pageBrand").textContent = "Zoe's Dream Haven " + pg.label;
+  closeSidebar(); renderNav(); renderPage();
+}
+
+function toggleSidebar(){ $("sidebar").classList.toggle("open"); $("overlay").style.display=$("sidebar").classList.contains("open")?"block":"none"; }
+function closeSidebar(){ $("sidebar").classList.remove("open"); $("overlay").style.display="none"; }
+function closeModal(){ $("modal").innerHTML=""; }
+
+function renderPage(){
+  const c=$("content");
+  if(currentPage==="dashboard")  c.innerHTML=pageDashboard();
+  else if(currentPage==="inventory")  c.innerHTML=pageInventory();
+  else if(currentPage==="sales")      c.innerHTML=pageSales();
+  else if(currentPage==="receipts")   c.innerHTML=pageReceipts();
+  else if(currentPage==="customers")  c.innerHTML=pageCustomers();
+  else if(currentPage==="suppliers")  c.innerHTML=pageSuppliers();
+  else if(currentPage==="deliveries") c.innerHTML=pageDeliveries();
+  else if(currentPage==="reports")    c.innerHTML=pageReports();
+  else if(currentPage==="settings")   c.innerHTML=pageSettings();
+}
+
+// ══════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════
+function pageDashboard(){
+  const todaySales = sales.filter(s=>s.date===today()).reduce((a,s)=>a+s.total,0);
+  const weekSales  = sales.slice(0,7).reduce((a,s)=>a+s.total,0);
+  const monthSales = sales.reduce((a,s)=>a+s.total,0);
+  const rcpToday   = receipts.filter(r=>r.date===today()).length;
+  const pendingDel = deliveries.filter(d=>d.status==="Pending").length;
+  const lowStock   = products.filter(p=>p.stock<=4).length;
+
+  // weekly bar data
+  const days=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const dayVals=[3200,5800,2200,4200,3200,2040,3400];
+  const maxV=Math.max(...dayVals);
+
+  const statCards=[
+    {label:"Today's Sales",   value:fmt(todaySales), icon:"💵",color:"#dc0a2d"},
+    {label:"Weekly Sales",    value:fmt(weekSales),  icon:"📅",color:"#dc0a2d"},
+    {label:"Monthly Sales",   value:fmt(monthSales), icon:"📆",color:"#dc0a2d"},
+    {label:"Receipts Today",  value:rcpToday,        icon:"🧾",color:"#dc0a2d"},
+    {label:"Pending Deliveries",value:pendingDel,    icon:"🚚",color:"#dc0a2d"},
+    {label:"Low Stock Items", value:lowStock,        icon:"⚠️",color:"#dc0a2d"},
+  ];
+
+  const quickActions=[
+    {label:"New Sale",          icon:"🛒",page:"sales"},
+    {label:"View Receipts",     icon:"🧾",page:"receipts"},
+    {label:"Add Product",       icon:"📦",page:"inventory"},
+    {label:"Add Customer",      icon:"👤",page:"customers"},
+    {label:"Add Supplier",      icon:"🏭",page:"suppliers"},
+    {label:"Schedule Delivery", icon:"🚚",page:"deliveries"},
+  ];
+
+  return `
+  <div class="welcome-banner">
+    <svg class="welcome-watermark" viewBox="0 0 220 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M15 95 L15 60 Q15 50 25 50 L75 50 Q85 50 85 60 L85 75" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M85 75 L95 60 Q98 55 105 55 L185 55 Q195 55 198 65 L205 95" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="10" y="90" width="200" height="14" rx="6" stroke="#fff" stroke-width="3" fill="none"/>
+      <line x1="15" y1="104" x2="15" y2="118" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+      <line x1="205" y1="104" x2="205" y2="118" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+      <path d="M25 75 Q35 68 45 75 Q55 68 65 75 L65 90 L25 90 Z" stroke="#fff" stroke-width="2.5" fill="none" stroke-linejoin="round"/>
+      <rect x="95" y="68" width="100" height="22" rx="4" stroke="#fff" stroke-width="2.5" fill="none"/>
+    </svg>
+    <div class="welcome-content">
+      <div class="welcome-title">Welcome to Zoe's Dream Haven 👋</div>
+      <div class="welcome-sub">Business Management System</div>
+    </div>
+    <div class="welcome-stat">
+      <div class="welcome-stat-label">Monthly Revenue</div>
+      <div class="welcome-stat-value">${fmt(monthSales)}</div>
+      <div class="welcome-stat-note">${new Date().toLocaleDateString("en-ZA",{month:"long",year:"numeric"})}</div>
+    </div>
+  </div>
+
+  <div class="card-grid">
+    ${statCards.map(c=>`
+      <div class="stat-card">
+        <div class="stat-icon">${c.icon}</div>
+        <div>
+          <div class="stat-value">${c.value}</div>
+          <div class="stat-label">${c.label}</div>
+        </div>
+      </div>`).join("")}
+  </div>
+
+  <div style="margin-bottom:14px">
+    <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:10px">⚡ Quick Actions</div>
+    <div class="quick-actions">
+      ${quickActions.map(a=>`<button class="qa-btn" onclick="goPage('${a.page}')">${a.icon} ${a.label}</button>`).join("")}
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-box">
+      <div class="chart-title">📊 Weekly Sales Trend</div>
+      <div class="bar-chart">
+        ${days.map((d,i)=>`
+          <div class="bar-wrap">
+            <div class="bar-val">R${(dayVals[i]/1000).toFixed(1)}k</div>
+            <div class="bar" style="height:${Math.round((dayVals[i]/maxV)*80)+4}px"></div>
+            <div class="bar-label">${d}</div>
+          </div>`).join("")}
+      </div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">📦 Stock Overview</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${products.slice(0,5).map(p=>`
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+              <span style="color:#374151;font-weight:500">${p.name}</span>
+              <span style="color:${p.stock<=4?'#dc0a2d':'#065f46'};font-weight:700">${p.stock} units</span>
+            </div>
+            <div class="stock-bar-wrap">
+              <div class="stock-bar" style="width:${Math.min(100,p.stock*5)}%;background:${p.stock<=4?'linear-gradient(90deg,#dc0a2d,#7a0a1f)':'linear-gradient(90deg,#0e9f6e,#065f46)'}"></div>
+            </div>
+          </div>`).join("")}
+      </div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-head"><span>Recent Sales</span><button class="btn-link" onclick="goPage('sales')">View all →</button></div>
+      <table><thead><tr><th>Date</th><th>Customer</th><th>Total</th><th>Method</th></tr></thead>
+      <tbody>${sales.slice(0,5).map(s=>`
+        <tr><td>${s.date}</td><td>${s.customer}</td>
+        <td><strong>${fmt(s.total)}</strong></td>
+        <td><span class="chip">${s.method}</span></td></tr>`).join("")}
+      </tbody></table>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><span>⚠️ Low Stock Alert</span><span class="badge red">${lowStock} items</span></div>
+      ${products.filter(p=>p.stock<=4).map(p=>`
+        <div class="alert-row">
+          <span style="font-size:16px">📦</span>
+          <span style="flex:1;font-weight:500">${p.name}</span>
+          <span class="badge red">${p.stock} left</span>
+        </div>`).join("")}
+      ${products.filter(p=>p.stock<=4).length===0?`<p style="color:#9ca3af;font-size:13px;text-align:center;padding:12px">✅ All stock levels healthy</p>`:""}
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #f3f4f6">
+        <div class="panel-head"><span>🚚 Pending Deliveries</span></div>
+        ${deliveries.filter(d=>d.status==="Pending").map(d=>`
+          <div class="alert-row">
+            <span style="font-size:16px">🚚</span>
+            <span style="flex:1">${d.customer}</span>
+            <span class="badge yellow">${d.date}</span>
+          </div>`).join("")}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════
+// INVENTORY
+// ══════════════════════════════════════════
+function pageInventory(){
+  const q=searchVal.toLowerCase();
+  const list=products.filter(p=>p.name.toLowerCase().includes(q)||p.cat.toLowerCase().includes(q));
+  return `
+  <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Inventory</div>
+  <div class="toolbar">
+    <div class="search-box">🔍 <input placeholder="Search products…" oninput="searchVal=this.value;renderPage()" value="${searchVal}"></div>
+    <button class="btn-red" onclick="openProductModal(null)">＋ Add Product</button>
+  </div>
+  <div class="panel">
+    <table><thead><tr><th>Name</th><th>Category</th><th>Supplier</th><th>Cost</th><th>Price</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>${list.map(p=>`
+      <tr>
+        <td><strong>${p.name}</strong></td>
+        <td><span class="chip">${p.cat}</span></td>
+        <td>${p.supplier}</td>
+        <td>${fmt(p.cost)}</td>
+        <td>${fmt(p.price)}</td>
+        <td><strong>${p.stock}</strong></td>
+        <td><span class="badge ${p.stock<=4?'red':p.stock<=8?'yellow':'green'}">${p.stock<=4?"Low Stock":p.stock<=8?"Limited":"In Stock"}</span></td>
+        <td>
+          <button class="btn-icon" onclick="openProductModal(${p.id})" title="Edit">✏️</button>
+          <button class="btn-icon" onclick="delProduct(${p.id})" title="Delete">🗑️</button>
+        </td>
+      </tr>`).join("")}
+    </tbody></table>
+  </div>`;
+}
+
+function delProduct(id){ if(confirm("Delete this product?")){ products=products.filter(p=>p.id!==id); renderPage(); } }
+
+function openProductModal(id){
+  const p=id?products.find(x=>x.id===id):null;
+  const cats=["Beds","Mattresses","Headboards","Accessories","Bases"];
+  $("modal").innerHTML=`
+  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div><div class="modal-title">${p?"Edit":"Add"} Product</div><div class="modal-brand">Zoe's Dream Haven Inventory</div></div>
+        <button class="close-btn" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row"><label class="form-label">Product Name</label><input class="form-input" id="mName" value="${p?p.name:''}"></div>
+        <div class="grid-2">
+          <div class="form-row"><label class="form-label">Category</label>
+            <input class="form-input" id="mCat" list="catList" placeholder="Type or pick a category…" value="${p?p.cat:''}">
+            <datalist id="catList">${cats.map(c=>`<option value="${c}">`).join("")}</datalist>
+          </div>
+          <div class="form-row"><label class="form-label">Supplier</label>
+            <input class="form-input" id="mSup" list="supList" placeholder="Type or pick a supplier…" value="${p?p.supplier:''}">
+            <datalist id="supList">${suppliers.map(s=>`<option value="${s.name}">`).join("")}</datalist>
+          </div>
+        </div>
+        <div class="grid-3">
+          <div class="form-row"><label class="form-label">Cost (R)</label><input class="form-input" type="number" id="mCost" value="${p?p.cost:''}"></div>
+          <div class="form-row"><label class="form-label">Price (R)</label><input class="form-input" type="number" id="mPrice" value="${p?p.price:''}"></div>
+          <div class="form-row"><label class="form-label">Stock</label><input class="form-input" type="number" id="mStock" value="${p?p.stock:''}"></div>
+        </div>
+        <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="saveProduct(${id||'null'})">✓ Save Product</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveProduct(id){
+  const d={name:v("mName"),cat:v("mCat").trim()||"Uncategorised",supplier:v("mSup").trim()||"—",cost:+v("mCost"),price:+v("mPrice"),stock:+v("mStock")};
+  if(id) products=products.map(p=>p.id===id?{...p,...d}:p);
+  else   products=[...products,{...d,id:Date.now()}];
+  if(d.supplier!=="—" && !suppliers.find(s=>s.name.toLowerCase()===d.supplier.toLowerCase())){
+    suppliers=[...suppliers,{id:Date.now()+1,name:d.supplier,contact:"",phone:"",email:""}];
+  }
+  closeModal(); renderPage();
+}
+
+// ══════════════════════════════════════════
+// SALES
+// ══════════════════════════════════════════
+function pageSales(){
+  return `
+  <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Sales</div>
+  <div style="background:#fff1f2;border:1.5px solid #fecdd3;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#7a0a1f;display:flex;align-items:center;gap:8px">
+    💡 Every sale saved here automatically updates Inventory, saves the Customer, and generates a Receipt in the Receipts tab.
+  </div>
+  <div class="toolbar">
+    <span style="color:#6b7280;font-size:13px">${sales.length} sales recorded</span>
+    <button class="btn-red" onclick="openSaleModal()">＋ New Sale</button>
+  </div>
+  <div class="panel">
+    <table><thead><tr><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Method</th><th>Receipt</th><th>Actions</th></tr></thead>
+    <tbody>${sales.map(s=>`
+      <tr>
+        <td>${s.date}</td><td>${s.customer}</td>
+        <td>${s.items.map(i=>`${i.product} ×${i.qty}`).join(", ")}</td>
+        <td><strong>${fmt(s.total)}</strong></td>
+        <td><span class="chip">${s.method}</span></td>
+        <td>${s.receiptNum?`<span class="badge green">${s.receiptNum}</span>`:`<span class="badge grey">—</span>`}</td>
+        <td><button class="btn-icon" onclick="delSale(${s.id})" title="Delete">🗑️</button></td>
+      </tr>`).join("")}
+    </tbody></table>
+  </div>`;
+}
+
+function delSale(id){ if(confirm("Delete this sale record? Its linked receipt will remain in Receipts unless deleted separately.")){ sales=sales.filter(s=>s.id!==id); renderPage(); } }
+
+let saleCart = [];
+
+function openSaleModal(){
+  saleCart = [];
+  $("modal").innerHTML=`
+  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box" style="max-width:560px">
+      <div class="modal-head">
+        <div><div class="modal-title">New Sale</div><div class="modal-brand">Zoe's Dream Haven Sales</div></div>
+        <button class="close-btn" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row"><label class="form-label">Date</label><input class="form-input" type="date" id="sDate" value="${today()}"></div>
+
+        <div style="font-size:11px;font-weight:700;color:#dc0a2d;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px;border-top:1px solid #f3f4f6;padding-top:14px">Customer Details</div>
+        <div class="grid-2">
+          <div class="form-row"><label class="form-label">Customer Name</label>
+            <input class="form-input" id="sCust" list="custList" placeholder="Type or pick a customer…" value="Walk-in">
+            <datalist id="custList"><option value="Walk-in">${customers.map(c=>`<option value="${c.name}">`).join("")}</datalist>
+          </div>
+          <div class="form-row"><label class="form-label">Phone Number</label><input class="form-input" id="sCustPhone" placeholder="e.g. 071 234 5678"></div>
+        </div>
+
+        <div style="font-size:11px;font-weight:700;color:#dc0a2d;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px;border-top:1px solid #f3f4f6;padding-top:14px">Add Items to This Sale</div>
+        <div class="form-row"><label class="form-label">Product</label>
+          <input class="form-input" id="sProd" list="prodList" placeholder="Type or pick a product…" oninput="calcSaleLine()">
+          <datalist id="prodList">${products.map(p=>`<option value="${p.name}">`).join("")}</datalist>
+        </div>
+        <div id="sNewPriceRow" class="form-row" style="display:none">
+          <label class="form-label" style="color:#dc0a2d">⚠ New Product — Selling Price Required (R)</label>
+          <input class="form-input" type="number" id="sNewPrice" placeholder="Enter price to continue" oninput="calcSaleLine()" style="border-color:#dc0a2d">
+        </div>
+        <div class="grid-2">
+          <div class="form-row"><label class="form-label">Quantity</label><input class="form-input" type="number" id="sQty" value="1" min="1" oninput="calcSaleLine()"></div>
+          <div class="form-row"><label class="form-label">Line Total</label>
+            <div class="form-input" style="background:#f9fafb;display:flex;align-items:center;font-weight:700;color:#dc0a2d" id="sLineTotal">R 0.00</div>
+          </div>
+        </div>
+        <div id="sLineErr" style="display:none;color:#dc0a2d;font-size:12px;font-weight:600;margin-bottom:8px">⚠ Please enter a selling price for this new product first.</div>
+        <button class="btn-black" style="width:100%;justify-content:center;margin-bottom:16px" onclick="addSaleItem()">＋ Add Item to Sale</button>
+
+        <div id="sCartBox" style="background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;padding:4px;margin-bottom:14px">
+          <div id="sCartList" style="padding:8px"></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-row"><label class="form-label">Payment Method</label>
+            <select class="form-input" id="sMethod"><option>Cash</option><option>Card</option><option>EFT</option></select></div>
+        </div>
+        <div class="total-box">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:13px;color:#374151;font-weight:600">Sale Grand Total</span>
+            <strong id="sTotal" style="color:#dc0a2d;font-size:22px">R 0.00</strong>
+          </div>
+        </div>
+        <div id="sErr" style="display:none;color:#dc0a2d;font-size:12px;font-weight:600;margin-bottom:10px">⚠ Please add at least one item to the sale before saving.</div>
+        <div style="font-size:11px;color:#6b7280;margin-bottom:10px">✓ Saving will deduct stock for every item, save the customer, and generate one receipt for the whole sale.</div>
+        <div style="display:flex;gap:10px">
+          <button class="btn-red" style="flex:1;justify-content:center" onclick="saveSale()">✓ Save Sale</button>
+          <button class="btn-outline" onclick="closeModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  calcSaleLine(); renderSaleCart();
+}
+
+function calcSaleLine(){
+  const pName=v("sProd");
+  const p=products.find(x=>x.name.toLowerCase()===pName.toLowerCase());
+  const isNew = pName.trim()!=="" && !p;
+  if($("sNewPriceRow")) $("sNewPriceRow").style.display = isNew ? "block" : "none";
+  const price = p ? p.price : (+v("sNewPrice")||0);
+  if($("sLineTotal")) $("sLineTotal").textContent=fmt(price*(+v("sQty")||1));
+}
+
+function addSaleItem(){
+  const pName=v("sProd").trim(); const qty=+v("sQty")||1;
+  if(!pName){ alert("Please enter a product first."); return; }
+  let p=products.find(x=>x.name.toLowerCase()===pName.toLowerCase());
+  let isNewProduct=false; let newPrice=0;
+  if(!p){
+    newPrice=+v("sNewPrice");
+    if(!newPrice || newPrice<=0){
+      $("sLineErr").style.display="block";
+      $("sNewPrice").focus();
+      return;
+    }
+    isNewProduct=true;
+  }
+  $("sLineErr").style.display="none";
+  saleCart.push({
+    product: p ? p.name : pName,
+    qty, price: p ? p.price : newPrice,
+    isNew: isNewProduct
+  });
+  // reset the line inputs for the next item
+  $("sProd").value=""; $("sQty").value="1";
+  if($("sNewPrice")) $("sNewPrice").value="";
+  $("sNewPriceRow").style.display="none";
+  calcSaleLine();
+  renderSaleCart();
+}
+
+function removeSaleItem(idx){
+  saleCart.splice(idx,1);
+  renderSaleCart();
+}
+
+function renderSaleCart(){
+  const box=$("sCartList"); if(!box) return;
+  if(saleCart.length===0){
+    box.innerHTML=`<p style="color:#9ca3af;font-size:12px;text-align:center;padding:10px">No items added yet — add a product above.</p>`;
+  } else {
+    box.innerHTML = saleCart.map((it,i)=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 6px;border-bottom:1px solid #e5e7eb;font-size:13px">
+        <div>
+          <strong>${it.product}</strong> ${it.isNew?'<span class="badge red" style="margin-left:4px">New</span>':''}
+          <div style="color:#6b7280;font-size:11px">${it.qty} × ${fmt(it.price)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <strong style="color:#111">${fmt(it.qty*it.price)}</strong>
+          <button class="btn-icon" onclick="removeSaleItem(${i})" title="Remove">🗑️</button>
+        </div>
+      </div>`).join("");
+  }
+  const grandTotal=saleCart.reduce((a,it)=>a+it.qty*it.price,0);
+  if($("sTotal")) $("sTotal").textContent=fmt(grandTotal);
+}
+
+function saveSale(){
+  if(saleCart.length===0){
+    $("sErr").style.display="block";
+    return;
+  }
+  const method=v("sMethod");
+  const custName=v("sCust").trim()||"Walk-in";
+  const custPhone=v("sCustPhone").trim();
+  const saleDate=v("sDate");
+  const grandTotal=saleCart.reduce((a,it)=>a+it.qty*it.price,0);
+
+  // 1) Add any brand-new products to Inventory, then deduct stock for every item
+  saleCart.forEach(it=>{
+    let p=products.find(x=>x.name.toLowerCase()===it.product.toLowerCase());
+    if(!p){
+      p={id:Date.now()+Math.random(),name:it.product,cat:"Uncategorised",supplier:"—",cost:0,price:it.price,stock:0};
+      products=[...products,p];
+    }
+    products=products.map(pr=>pr.id===p.id?{...pr,stock:Math.max(0,pr.stock-it.qty)}:pr);
+  });
+
+  // 2) Save / update Customer record
+  const existingCust=customers.find(c=>c.name.toLowerCase()===custName.toLowerCase());
+  if(existingCust){
+    if(custPhone) customers=customers.map(c=>c.id===existingCust.id?{...c,phone:custPhone||c.phone}:c);
+  } else if(custName!=="Walk-in"){
+    customers=[...customers,{id:Date.now()+1,name:custName,phone:custPhone,email:""}];
+  }
+
+  // 3) Auto-generate one Receipt covering every item
+  const receiptNum="ZDH-00"+String(receiptCounter).padStart(3,"0"); receiptCounter++;
+  const items = saleCart.map(it=>({product:it.product,qty:it.qty,price:it.price}));
+  const receipt={id:Date.now()+2,num:receiptNum,date:saleDate,customer:custName,phone:custPhone,
+    items,total:grandTotal,method,status:"Paid in Full"};
+  receipts=[receipt,...receipts];
+
+  // 4) Save the Sale, linked to its receipt, with every item
+  sales=[{id:Date.now(),date:saleDate,customer:custName,items,total:grandTotal,method,receiptNum},...sales];
+
+  saleCart=[];
+  closeModal(); renderPage();
+}
+
+// ══════════════════════════════════════════
+// RECEIPTS
+// ══════════════════════════════════════════
+function pageReceipts(){
+  return `
+  <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Receipts</div>
+  <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#065f46;display:flex;align-items:center;gap:8px">
+    🧾 Receipts are generated automatically when a sale is saved. Find the receipt below, then View or Print it for the customer.
+  </div>
+  <div class="toolbar">
+    <span style="color:#6b7280;font-size:13px">${receipts.length} receipts on file</span>
+  </div>
+  <div class="panel">
+    <table><thead><tr><th>Receipt No.</th><th>Customer</th><th>Date</th><th>Method</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>${receipts.map(r=>`
+      <tr>
+        <td><strong style="color:#dc0a2d">${r.num}</strong></td>
+        <td>${r.customer}</td><td>${r.date}</td>
+        <td><span class="chip">${r.method}</span></td>
+        <td><strong>${fmt(r.total)}</strong></td>
+        <td><span class="badge green">${r.status}</span></td>
+        <td>
+          <button class="btn-icon" onclick="viewReceipt(${r.id})" title="View">👁️</button>
+          <button class="btn-icon" onclick="printReceipt(${r.id})" title="Print">🖨️</button>
+          <button class="btn-icon" onclick="editReceiptDetails(${r.id})" title="Edit Customer Details">✏️</button>
+          <button class="btn-icon" onclick="delReceipt(${r.id})" title="Delete">🗑️</button>
+        </td>
+      </tr>`).join("")}
+    </tbody></table>
+    ${receipts.length===0?`<p style="color:#9ca3af;font-size:13px;text-align:center;padding:24px">No receipts yet. Receipts appear here automatically once a sale is saved.</p>`:""}
+  </div>`;
+}
+
+function delReceipt(id){ if(confirm("Delete this receipt? This cannot be undone.")){ receipts=receipts.filter(r=>r.id!==id); renderPage(); } }
+
+function receiptHTML(r,forPrint){
+  return `
+  <div class="receipt-preview" id="rPreview">
+    <h3>${settings.name}</h3>
+    <div class="r-sub">${settings.address}</div>
+    <div class="r-sub">${settings.phone} | ${settings.email}</div>
+    <div class="r-divider"></div>
+    <div class="r-row"><span><strong>RECEIPT</strong></span><span>${r.num}</span></div>
+    <div class="r-row"><span>Date:</span><span>${r.date}</span></div>
+    <div class="r-row"><span>Customer:</span><span>${r.customer}</span></div>
+    ${r.phone?`<div class="r-row"><span>Phone:</span><span>${r.phone}</span></div>`:""}
+    <div class="r-divider"></div>
+    <div class="r-row" style="font-weight:700;font-size:11px;color:#6b7280"><span>PRODUCT</span><span>QTY &nbsp; PRICE &nbsp; TOTAL</span></div>
+    <div class="r-divider"></div>
+    ${r.items.map(i=>`<div class="r-row"><span>${i.product}</span><span>${i.qty} × ${fmt(i.price)} = ${fmt(i.qty*i.price)}</span></div>`).join("")}
+    <div class="r-divider"></div>
+    <div class="r-total"><span>TOTAL</span><span>${fmt(r.total)}</span></div>
+    <div class="r-row"><span>Payment Method:</span><span>${r.method}</span></div>
+    <div class="r-row"><span>Status:</span><span><strong style="color:#0e9f6e">${r.status}</strong></span></div>
+    <div class="r-divider"></div>
+    <div style="text-align:center;font-size:11px;color:#6b7280;margin-top:6px">Thank you for shopping at ${settings.name}!</div>
+  </div>`;
+}
+
+function viewReceipt(id){
+  const r=receipts.find(x=>x.id===id);
+  $("modal").innerHTML=`
+  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div><div class="modal-title">Receipt ${r.num}</div><div class="modal-brand">Zoe's Dream Haven Receipts</div></div>
+        <button class="close-btn" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        ${receiptHTML(r,false)}
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button class="btn-red" style="flex:1;justify-content:center" onclick="printReceipt(${id})">🖨️ Print Receipt</button>
+          <button class="btn-outline" onclick="closeModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function printReceipt(id){
+  const r=receipts.find(x=>x.id===id);
+  const w=window.open("","_blank","width=400,height=600");
+  w.document.write(`<html><head><title>Receipt ${r.num}</title><style>
+    body{font-family:'Segoe UI',sans-serif;padding:20px;max-width:360px;margin:0 auto}
+    h3{text-align:center;font-size:16px;margin-bottom:2px}
+    .sub{text-align:center;font-size:11px;color:#666;margin-bottom:6px}
+    .divider{border-top:1px dashed #ccc;margin:8px 0}
+    .row{display:flex;justify-content:space-between;font-size:12px;padding:2px 0}
+    .total{display:flex;justify-content:space-between;font-weight:800;font-size:15px;padding:6px 0}
+    .footer{text-align:center;font-size:11px;color:#666;margin-top:8px}
+  </style></head><body>
+    <h3>${settings.name}</h3>
+    <div class="sub">${settings.address}</div>
+    <div class="sub">${settings.phone} | ${settings.email}</div>
+    <div class="divider"></div>
+    <div class="row"><span><strong>RECEIPT</strong></span><span>${r.num}</span></div>
+    <div class="row"><span>Date:</span><span>${r.date}</span></div>
+    <div class="row"><span>Customer:</span><span>${r.customer}</span></div>
+    ${r.phone?`<div class="row"><span>Phone:</span><span>${r.phone}</span></div>`:""}
+    <div class="divider"></div>
+    ${r.items.map(i=>`<div class="row"><span>${i.product}</span><span>${i.qty} × R${i.price.toLocaleString()} = R${(i.qty*i.price).toLocaleString()}</span></div>`).join("")}
+    <div class="divider"></div>
+    <div class="total"><span>TOTAL</span><span>R ${r.total.toLocaleString()}</span></div>
+    <div class="row"><span>Payment:</span><span>${r.method}</span></div>
+    <div class="row"><span>Status:</span><span><strong>${r.status}</strong></span></div>
+    <div class="divider"></div>
+    <div class="footer">Thank you for shopping at ${settings.name}!</div>
+  </body></html>`);
+  w.document.close(); w.print();
+}
+
+function editReceiptDetails(id){
+  const r=receipts.find(x=>x.id===id);
+  $("modal").innerHTML=`
+  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div><div class="modal-title">Edit Receipt ${r.num}</div><div class="modal-brand">Zoe's Dream Haven Receipts</div></div>
+        <button class="close-btn" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:14px">
+          ℹ️ Only customer details can be edited here. Pricing and items are locked to protect the sale record.
+        </div>
+        <div class="form-row"><label class="form-label">Customer Name</label><input class="form-input" id="erCust" value="${r.customer}"></div>
+        <div class="form-row"><label class="form-label">Phone Number</label><input class="form-input" id="erPhone" value="${r.phone||''}"></div>
+        <div class="form-row" style="background:#f9fafb;border-radius:8px;padding:12px 14px">
+          <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Locked — Items &amp; Total</div>
+          ${r.items.map(i=>`<div style="font-size:13px;color:#374151">${i.product} ×${i.qty} — ${fmt(i.qty*i.price)}</div>`).join("")}
+          <div style="font-size:14px;font-weight:800;color:#111;margin-top:6px">Total: ${fmt(r.total)}</div>
+        </div>
+        <button class="btn-red" style="width:100%;justify-content:center;margin-top:12px" onclick="saveReceiptDetails(${id})">✓ Save Changes</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveReceiptDetails(id){
+  const newName=v("erCust").trim(); const newPhone=v("erPhone").trim();
+  receipts=receipts.map(r=>r.id===id?{...r,customer:newName||r.customer,phone:newPhone}:r);
+  closeModal(); renderPage();
+}
+
+// ══════════════════════════════════════════
+// CUSTOMERS
+// ══════════════════════════════════════════
+function pageCustomers(){
+  const q=searchVal.toLowerCase();
+  const list=customers.filter(c=>c.name.toLowerCase().includes(q)||c.phone.includes(q));
+  return `
+  <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Customers</div>
+  <div class="toolbar">
+    <div class="search-box">🔍 <input placeholder="Search customers…" oninput="searchVal=this.value;renderPage()" value="${searchVal}"></div>
+    <button class="btn-red" onclick="openCustModal(null)">＋ Add Customer</button>
+  </div>
+  <div class="panel">
+    <table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Purchases</th><th>Actions</th></tr></thead>
+    <tbody>${list.map(c=>{
+      const purchases=sales.filter(s=>s.customer===c.name).length;
+      return `<tr>
+        <td><strong>${c.name}</strong></td>
+        <td>${c.phone}</td>
+        <td>${c.email||"—"}</td>
+        <td><span class="badge">${purchases} sale${purchases!==1?"s":""}</span></td>
+        <td>
+          <button class="btn-icon" onclick="openCustModal(${c.id})">✏️</button>
+          <button class="btn-icon" onclick="delCust(${c.id})">🗑️</button>
+        </td>
+      </tr>`;}).join("")}
+    </tbody></table>
+  </div>`;
+}
+
+function delCust(id){ if(confirm("Delete this customer?")){ customers=customers.filter(c=>c.id!==id); renderPage(); } }
+
+function openCustModal(id){
+  const c=id?customers.find(x=>x.id===id):null;
+  $("modal").innerHTML=`
+  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div><div class="modal-title">${c?"Edit":"Add"} Customer</div><div class="modal-brand">Zoe's Dream Haven Customers</div></div>
+        <button class="close-btn" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row"><label class="form-label">Full Name</label><input class="form-input" id="cName" value="${c?c.name:''}"></div>
+        <div class="form-row"><label class="form-label">Phone Number</label><input class="form-input" id="cPhone" value="${c?c.phone:''}"></div>
+        <div class="form-row"><label class="form-label">Email (Optional)</label><input class="form-input" id="cEmail" value="${c?c.email:''}"></div>
+        <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="saveCust(${id||'null'})">✓ Save Customer</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveCust(id){
+  const d={name:v("cName"),phone:v("cPhone"),email:v("cEmail")};
+  if(id) customers=customers.map(c=>c.id===id?{...c,...d}:c);
+  else   customers=[...customers,{...d,id:Date.now()}];
+  closeModal(); renderPage();
+}
+
+// ══════════════════════════════════════════
+// SUPPLIERS
+// ══════════════════════════════════════════
+function pageSuppliers(){
+  const q=searchVal.toLowerCase();
+  const list=suppliers.filter(s=>s.name.toLowerCase().includes(q)||s.contact.toLowerCase().includes(q));
+  return `
+  <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Suppliers</div>
+  <div class="toolbar">
+    <div class="search-box">🔍 <input placeholder="Search suppliers…" oninput="searchVal=this.value;renderPage()" value="${searchVal}"></div>
+    <button class="btn-red" onclick="openSupModal(null)">＋ Add Supplier</button>
+  </div>
+  <div class="panel">
+    <table><thead><tr><th>Company</th><th>Contact Person</th><th>Phone</th><th>Email</th><th>Actions</th></tr></thead>
+    <tbody>${list.map(s=>`
+      <tr>
+        <td><strong>${s.name}</strong></td>
+        <td>${s.contact}</td>
+        <td>${s.phone}</td>
+        <td>${s.email||"—"}</td>
+        <td>
+          <button class="btn-icon" onclick="openSupModal(${s.id})">✏️</button>
+          <button class="btn-icon" onclick="delSup(${s.id})">🗑️</button>
+        </td>
+      </tr>`).join("")}
+    </tbody></table>
+  </div>`;
+}
+
+function delSup(id){ if(confirm("Delete this supplier?")){ suppliers=suppliers.filter(s=>s.id!==id); renderPage(); } }
+
+function openSupModal(id){
+  const s=id?suppliers.find(x=>x.id===id):null;
+  $("modal").innerHTML=`
+  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div><div class="modal-title">${s?"Edit":"Add"} Supplier</div><div class="modal-brand">Zoe's Dream Haven Suppliers</div></div>
+        <button class="close-btn" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row"><label class="form-label">Company Name</label><input class="form-input" id="sName" value="${s?s.name:''}"></div>
+        <div class="form-row"><label class="form-label">Contact Person</label><input class="form-input" id="sCont" value="${s?s.contact:''}"></div>
+        <div class="grid-2">
+          <div class="form-row"><label class="form-label">Phone</label><input class="form-input" id="sPhone" value="${s?s.phone:''}"></div>
+          <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="sEmail" value="${s?s.email:''}"></div>
+        </div>
+        <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="saveSup(${id||'null'})">✓ Save Supplier</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveSup(id){
+  const d={name:v("sName"),contact:v("sCont"),phone:v("sPhone"),email:v("sEmail")};
+  if(id) suppliers=suppliers.map(s=>s.id===id?{...s,...d}:s);
+  else   suppliers=[...suppliers,{...d,id:Date.now()}];
+  closeModal(); renderPage();
+}
+
+// ══════════════════════════════════════════
+// DELIVERIES
+// ══════════════════════════════════════════
+function pageDeliveries(){
+  const statColor={Pending:"yellow",Delivered:"green",Rescheduled:"red"};
+  return `
+  <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Deliveries</div>
+  <div class="toolbar">
+    <span style="color:#6b7280;font-size:13px">${deliveries.length} deliveries</span>
+    <button class="btn-red" onclick="openDelModal(null)">＋ Schedule Delivery</button>
+  </div>
+  <div class="panel">
+    <table><thead><tr><th>Customer</th><th>Delivery Address</th><th>Date</th><th>Driver</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>${deliveries.map(d=>`
+      <tr>
+        <td><strong>${d.customer}</strong></td>
+        <td>${d.address}</td>
+        <td>${d.date}</td>
+        <td>${d.driver}</td>
+        <td><span class="badge ${statColor[d.status]||'grey'}">${d.status}</span></td>
+        <td>
+          <button class="btn-icon" onclick="openDelModal(${d.id})">✏️</button>
+          <button class="btn-icon" onclick="delDel(${d.id})">🗑️</button>
+        </td>
+      </tr>`).join("")}
+    </tbody></table>
+  </div>`;
+}
+
+function delDel(id){ if(confirm("Delete this delivery?")){ deliveries=deliveries.filter(d=>d.id!==id); renderPage(); } }
+
+function openDelModal(id){
+  const d=id?deliveries.find(x=>x.id===id):null;
+  $("modal").innerHTML=`
+  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div><div class="modal-title">${d?"Edit":"Schedule"} Delivery</div><div class="modal-brand">Zoe's Dream Haven Deliveries</div></div>
+        <button class="close-btn" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row"><label class="form-label">Customer</label>
+          <input class="form-input" id="dCust" list="custList3" placeholder="Type or pick a customer…" value="${d?d.customer:''}">
+          <datalist id="custList3">${customers.map(c=>`<option value="${c.name}">`).join("")}</datalist>
+        </div>
+        <div class="form-row"><label class="form-label">Delivery Address</label><input class="form-input" id="dAddr" value="${d?d.address:''}"></div>
+        <div class="grid-2">
+          <div class="form-row"><label class="form-label">Delivery Date</label><input class="form-input" type="date" id="dDate" value="${d?d.date:today()}"></div>
+          <div class="form-row"><label class="form-label">Driver</label>
+            <input class="form-input" id="dDriver" list="driverList" placeholder="Type or pick a driver…" value="${d?d.driver:''}">
+            <datalist id="driverList">${[...new Set(deliveries.map(x=>x.driver))].map(dr=>`<option value="${dr}">`).join("")}</datalist>
+          </div>
+        </div>
+        <div class="form-row"><label class="form-label">Status</label>
+          <select class="form-input" id="dStatus">
+            ${["Pending","Delivered","Rescheduled"].map(s=>`<option ${d&&d.status===s?"selected":""}>${s}</option>`).join("")}
+          </select></div>
+        <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="saveDel(${id||'null'})">✓ Save Delivery</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveDel(id){
+  const custName=v("dCust").trim();
+  const d2={customer:custName,address:v("dAddr"),date:v("dDate"),driver:v("dDriver"),status:v("dStatus")};
+  if(id) deliveries=deliveries.map(d=>d.id===id?{...d,...d2}:d);
+  else   deliveries=[...deliveries,{...d2,id:Date.now()}];
+  if(custName && !customers.find(c=>c.name.toLowerCase()===custName.toLowerCase())){
+    customers=[...customers,{id:Date.now()+1,name:custName,phone:"",email:""}];
+  }
+  closeModal(); renderPage();
+}
+
+// ══════════════════════════════════════════
+// REPORTS
+// ══════════════════════════════════════════
+function pageReports(){
+  const totalRev=sales.reduce((a,s)=>a+s.total,0);
+  const totalCost=sales.reduce((a,s)=>{const p=products.find(pr=>pr.name===s.items[0]?.product);return a+(p?p.cost*s.items[0].qty:0);},0);
+  const gross=totalRev-totalCost;
+
+  const byMethod=["Cash","Card","EFT"].map(m=>({
+    m, count:sales.filter(s=>s.method===m).length,
+    total:sales.filter(s=>s.method===m).reduce((a,s)=>a+s.total,0)
+  }));
+
+  const bestSellers=[...products].sort((a,b)=>{
+    const aSales=sales.filter(s=>s.items[0]?.product===a.name).reduce((x,s)=>x+s.items[0].qty,0);
+    const bSales=sales.filter(s=>s.items[0]?.product===b.name).reduce((x,s)=>x+s.items[0].qty,0);
+    return bSales-aSales;
+  }).slice(0,5);
+
+  return `
+  <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Reports</div>
+  <div class="card-grid" style="grid-template-columns:repeat(3,1fr)">
+    ${[
+      {label:"Total Revenue",value:fmt(totalRev),icon:"💰",c:"#dc0a2d"},
+      {label:"Gross Profit", value:fmt(gross),   icon:"📈",c:"#0e9f6e"},
+      {label:"Receipts Issued",value:receipts.length,icon:"🧾",c:"#1a56db"},
+    ].map(c=>`
+      <div class="stat-card" style="border-left-color:${c.c}">
+        <div class="stat-icon">${c.icon}</div>
+        <div><div class="stat-value" style="color:${c.c}">${c.value}</div><div class="stat-label">${c.label}</div></div>
+      </div>`).join("")}
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-head">Sales by Payment Method</div>
+      <table><thead><tr><th>Method</th><th>Count</th><th>Total</th></tr></thead>
+      <tbody>${byMethod.map(m=>`
+        <tr><td><span class="chip">${m.m}</span></td><td>${m.count}</td><td><strong>${fmt(m.total)}</strong></td></tr>`).join("")}
+      </tbody></table>
+    </div>
+    <div class="panel">
+      <div class="panel-head">🏆 Best Selling Products</div>
+      ${bestSellers.map((p,i)=>{
+        const unitsSold=sales.filter(s=>s.items[0]?.product===p.name).reduce((x,s)=>x+s.items[0].qty,0);
+        return `<div class="alert-row">
+          <span style="font-weight:800;color:#dc0a2d;width:20px">${i+1}</span>
+          <span style="flex:1;font-weight:500">${p.name}</span>
+          <span class="badge">${unitsSold} sold</span>
+        </div>`;}).join("")}
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-head">📦 Low Stock Report</div>
+      <table><thead><tr><th>Product</th><th>Category</th><th>Stock</th><th>Status</th></tr></thead>
+      <tbody>${products.filter(p=>p.stock<=6).map(p=>`
+        <tr><td><strong>${p.name}</strong></td><td>${p.cat}</td><td>${p.stock}</td>
+        <td><span class="badge ${p.stock<=3?'red':'yellow'}">${p.stock<=3?"Critical":"Low"}</span></td></tr>`).join("")}
+      </tbody></table>
+    </div>
+    <div class="panel">
+      <div class="panel-head">🚚 Delivery Summary</div>
+      ${["Pending","Delivered","Rescheduled"].map(s=>{
+        const cnt=deliveries.filter(d=>d.status===s).length;
+        return `<div class="alert-row">
+          <span style="font-size:16px">${s==="Delivered"?"✅":s==="Pending"?"🕐":"🔄"}</span>
+          <span style="flex:1">${s}</span>
+          <span class="badge ${s==="Delivered"?"green":s==="Pending"?"yellow":"red"}">${cnt} deliveries</span>
+        </div>`;}).join("")}
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════
+function pageSettings(){
+  return `
+  <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Settings</div>
+  <div style="max-width:540px">
+    <div class="panel">
+      <div class="panel-head">Business Information</div>
+      <div class="form-row"><label class="form-label">Business Name</label><input class="form-input" id="setBizName" value="${settings.name}"></div>
+      <div class="form-row"><label class="form-label">Phone Number</label><input class="form-input" id="setPhone" value="${settings.phone}"></div>
+      <div class="form-row"><label class="form-label">Email Address</label><input class="form-input" id="setEmail" value="${settings.email}"></div>
+      <div class="form-row"><label class="form-label">Physical Address</label><input class="form-input" id="setAddr" value="${settings.address}"></div>
+      <button class="btn-red" onclick="saveSettings()">✓ Save Settings</button>
+    </div>
+  </div>`;
+}
+
+function saveSettings(){
+  settings.name=v("setBizName"); settings.phone=v("setPhone");
+  settings.email=v("setEmail");  settings.address=v("setAddr");
+  alert("✓ Settings saved successfully!");
+}
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+$("dateChip").textContent=new Date().toLocaleDateString("en-ZA",{day:"numeric",month:"short",year:"numeric"});
+renderNav();
+renderPage();
+</script>
+</body>
+</html>

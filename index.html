@@ -259,10 +259,10 @@ let products = [
   {id:7,name:"Pillow Top Mattress",cat:"Mattresses",supplier:"Edblo",cost:1900,price:3400,stock:2},
 ];
 let customers = [
-  {id:1,name:"Thandi Nkosi",phone:"071 234 5678",email:"thandi@email.com"},
-  {id:2,name:"Rajesh Pillay",phone:"082 987 6543",email:"rajesh@email.com"},
-  {id:3,name:"Sarah van der Berg",phone:"060 111 2233",email:"sarah@email.com"},
-  {id:4,name:"Monde Dlamini",phone:"073 445 6677",email:""},
+  {id:1,name:"Thandi Nkosi",phone:"123 456 789",email:"thandi@gmail.com"},
+  {id:2,name:"Rajesh Pillay",phone:"123 456 789",email:"rajesh@gmail.com"},
+  {id:3,name:"Sarah van der Berg",phone:"123 456 789",email:"sarah@gmail.com"},
+  {id:4,name:"Monde Dlamini",phone:"123 456 789",email:""},
 ];
 let suppliers = [
   {id:1,name:"Sealy SA",contact:"John Smith",phone:"011 222 3344",email:"orders@sealysa.co.za"},
@@ -280,7 +280,7 @@ let sales = [
   {id:7,date:"2025-06-23",customer:"Thandi Nkosi",items:[{product:"Pillow Top Mattress",qty:1,price:3400}],total:3400,method:"EFT"},
 ];
 let receipts = [
-  {id:1,num:"ZDH-001",date:"2025-06-28",customer:"Thandi Nkosi",phone:"071 234 5678",items:[{product:"King Bed Frame",qty:1,price:5800}],total:5800,method:"Card",status:"Paid in Full"},
+  {id:1,num:"ZDH-001",date:"2025-06-28",customer:"Thandi Nkosi",phone:"123 456 789",items:[{product:"King Bed Frame",qty:1,price:5800}],total:5800,method:"Card",status:"Paid in Full"},
   {id:2,num:"ZDH-002",date:"2025-06-28",customer:"Walk-in",phone:"",items:[{product:"Single Mattress Foam",qty:2,price:1100}],total:2200,method:"Cash",status:"Paid in Full"},
 ];
 let deliveries = [
@@ -608,7 +608,7 @@ function openSaleModal(){
             <input class="form-input" id="sCust" list="custList" placeholder="Type or pick a customer…" value="Walk-in">
             <datalist id="custList"><option value="Walk-in">${customers.map(c=>`<option value="${c.name}">`).join("")}</datalist>
           </div>
-          <div class="form-row"><label class="form-label">Phone Number</label><input class="form-input" id="sCustPhone" placeholder="e.g. 071 234 5678"></div>
+          <div class="form-row"><label class="form-label">Phone Number</label><input class="form-input" id="sCustPhone" placeholder="e.g. 123 456 789"></div>
         </div>
 
         <div style="font-size:11px;font-weight:700;color:#dc0a2d;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px;border-top:1px solid #f3f4f6;padding-top:14px">Add Items to This Sale</div>

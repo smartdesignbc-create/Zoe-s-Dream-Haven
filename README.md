@@ -1,59 +1,42 @@
-# 🛏️ Zoe's Dream Haven — Operations Dashboard
+# Zoe's Dream Haven — Operations Dashboard
 
-A premium, all-in-one Business Operations Dashboard built exclusively for **Zoe's Dream Haven**. Single HTML file — no installation, no server, no setup needed.
+A single-page business dashboard for Zoe's Dream Haven: inventory, sales, receipts, delivery notes, customers, suppliers, reports, and staff login access — all in one lightweight `index.html` file.
 
-**Client Sign-Off Version** — demonstrates the full look, feel, and workflow of the final product. No login, accounts, or database required at this stage.
+## What's in this version
 
----
+- **Top tab-bar navigation** — everything readable top to bottom, no side menu to open. Primary tabs (Dashboard, Sales, Inventory, Receipts, Deliveries, Customers) sit up front; Suppliers, Reports, Team & Access, and Settings live under **More**.
+- **Simplified Dashboard** — only the numbers that matter day to day (Today's Sales, Pending Deliveries, Low Stock), 3 quick actions, recent sales, and alerts. Deeper stats and charts moved to **Reports**.
+- **Delivery Notes** — every delivery captures customer name, surname, cell number, and address, and produces a printable Delivery Note with signature lines. Create one directly from a Receipt with one click.
+- **Login screen** — the whole app is gated behind sign-in. See **Login & Access** below.
+- **Full data flow** — a sale deducts stock, saves/updates the customer, generates a receipt, and can spin off a linked delivery note.
+- **Toast notifications** — no browser pop-ups; confirmations and errors appear as clean on-screen messages.
 
-## 🚀 How to Use
+## Login & Access (current state — demo mode)
 
-### Option 1 — Open Directly (Offline)
-1. Download `index.html`
-2. Double-click it
-3. It opens in your browser — done ✅
+This build includes a **working login screen**, but accounts are currently stored in memory in the browser (they reset on page refresh). This is intentional — it's the UI and flow the client approved, ready to be wired to real, permanent accounts.
 
-### Option 2 — Deploy Free on Vercel
-1. Upload this repo to GitHub
-2. Go to [vercel.com](https://vercel.com) → **Add New Project**
-3. Select this repo → click **Deploy**
-4. Your app is live online in 60 seconds ✅
+**Demo login:**
+- Email: `admin@demo.com`
+- Password: `admin123`
 
----
+**How it will work once connected to Supabase (next phase):**
+1. You keep a permanent developer/support login, separate from the client's.
+2. At handover, you use **Settings → Change Login Details** to switch the owner-level account to the client's own email and password, in front of them.
+3. From **Team & Access**, the owner can add staff members (each gets a temporary password to share), reset anyone's password, or remove access — all without your involvement.
+4. Your own login stays active permanently, so you can log in and confirm any issue the client reports before touching any code.
 
-## ✨ Features
+See `DEPLOYMENT.md` for the full rollout plan, including the Supabase phase.
 
-| Section | What you can do |
-|---|---|
-| 📊 **Dashboard** | Welcome banner, today's/weekly/monthly sales, receipts issued today, pending deliveries, low stock, weekly sales chart, stock overview, quick actions |
-| 📦 **Inventory** | Product name, category, supplier, cost, price, stock, status · Add / Edit / Delete / Search |
-| 🛒 **Sales** | Record daily sales by customer, product, quantity, and payment method |
-| 🧾 **Receipts** | Professional printed receipts with auto receipt numbers · Save, Print, Reprint, View history |
-| 👥 **Customers** | Name, phone, email, purchase history · Add / Edit / Search |
-| 🏭 **Suppliers** | Company, contact person, phone, email · Add / Edit / Search |
-| 🚚 **Deliveries** | Customer, address, date, driver, status (Pending / Delivered / Rescheduled) |
-| 📈 **Reports** | Daily/weekly/monthly sales, receipts issued, low stock report, best sellers, delivery summary |
-| ⚙️ **Settings** | Business name, phone, email, address |
+## Tech notes
 
----
+- Single file: `index.html` — no build step, no dependencies. Works as-is on GitHub Pages, Vercel, Netlify, or any static host.
+- All data (products, sales, customers, receipts, deliveries, staff accounts) currently lives in memory in the browser and resets on refresh. This is expected at this stage — persistent storage (Supabase) is the next phase.
+- Branding, colors, and business name are unchanged from the version the client approved.
 
-## 📁 Project Files
+## Project structure
 
 ```
-zoes-dream-haven/
-├── index.html      ← The entire app (one file)
-├── vercel.json     ← Vercel deployment config
-└── README.md       ← This file
+index.html      → the entire application (HTML + CSS + JS)
+README.md       → this file
+DEPLOYMENT.md   → step-by-step rollout: GitHub → Vercel → Supabase
 ```
-
----
-
-## 🎨 Design
-
-- Primary: Red · Secondary: Black · Background: Light Grey · Cards: White
-- Rounded cards, soft shadows, smooth hover effects, subtle animations
-- Fully responsive — desktop, tablet, and mobile
-
----
-
-## 🏪 Built exclusively for Zoe's Dream Haven · South Africa

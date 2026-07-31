@@ -36,7 +36,8 @@ button:hover{opacity:.88}
 #content{flex:1;padding:22px}
 
 /* ── Login Screen ── */
-#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0a0a0a 0%,#150508 60%,#000 100%);padding:20px}
+#loginScreen{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0a0a0a 0%,#150508 60%,#000 100%);padding:20px;overflow-y:auto}
+.login-card .form-input{font-size:16px}
 .login-card{background:#fff;border-radius:18px;padding:36px 32px;width:100%;max-width:380px;box-shadow:0 24px 60px rgba(0,0,0,.4);border-top:4px solid #dc0a2d}
 .login-logo{text-align:center;margin-bottom:22px}
 .login-logo .li{font-size:34px}
@@ -206,6 +207,10 @@ tr:hover td{background:#fef2f2}
   .modal-head{padding:16px 16px 12px}
   .modal-body{padding:16px}
   .login-card{padding:28px 22px}
+  #loginScreen{align-items:flex-start;padding-top:50px}
+}
+@media(max-width:1024px) and (pointer:coarse){
+  #loginScreen{align-items:flex-start;padding-top:60px}
 }
 @media(max-width:360px){
   .card-grid{grid-template-columns:1fr}
@@ -930,6 +935,16 @@ function viewReceipt(id){
 
 function printReceipt(id){
   const r=receipts.find(x=>x.id===id);
+  printReceiptObj(r);
+}
+
+function printReceiptByNum(num){
+  const r=receipts.find(x=>x.num===num);
+  if(!r){ toast("That receipt could no longer be found","error"); return; }
+  printReceiptObj(r);
+}
+
+function printReceiptObj(r){
   const w=window.open("","_blank","width=400,height=600");
   w.document.write(`<html><head><title>Receipt ${r.num}</title><style>
     body{font-family:'Segoe UI',sans-serif;padding:20px;max-width:360px;margin:0 auto}
@@ -1149,6 +1164,7 @@ function pageDeliveries(){
         <td>
           <button class="btn-icon" onclick="viewDelNote(${d.id})" title="View Delivery Note">👁️</button>
           <button class="btn-icon" onclick="printDelNote(${d.id})" title="Print Delivery Note">🖨️</button>
+          ${d.receiptNum?`<button class="btn-icon" onclick="printReceiptByNum('${d.receiptNum}')" title="Print Receipt">🧾</button>`:""}
           <button class="btn-icon" onclick="openDelModal(${d.id})" title="Edit">✏️</button>
           <button class="btn-icon" onclick="delDel(${d.id})" title="Delete">🗑️</button>
         </td>
@@ -1171,6 +1187,22 @@ function fillDelFromCustomer(){
   }
 }
 
+function fillDelFromReceiptSelect(){
+  const num=v("dLinkReceipt");
+  if(!num){ return; }
+  const r=receipts.find(x=>x.num===num);
+  if(!r) return;
+  const c=customers.find(x=>x.name.toLowerCase()===r.customer.toLowerCase());
+  $("dCust").value=r.customer;
+  $("dSurname").value=c?(c.surname||""):"";
+  $("dPhone").value=r.phone||(c?c.phone:"")||"";
+  $("dAddr").value=c?(c.address||""):"";
+  $("dReceiptNum").value=r.num;
+  delItemsCart=r.items.map(i=>({product:i.product,qty:i.qty}));
+  renderDelItems();
+  toast("Customer and items pulled from "+r.num,"success");
+}
+
 function openDelModal(id,prefill){
   const d=id?deliveries.find(x=>x.id===id):null;
   delItemsCart = d ? [...d.items] : (prefill&&prefill.items ? [...prefill.items] : []);
@@ -1184,6 +1216,16 @@ function openDelModal(id,prefill){
       </div>
       <div class="modal-body">
         <input type="hidden" id="dReceiptNum" value="${base.receiptNum||''}">
+        ${!d?`
+        <div class="form-row">
+          <label class="form-label">Link to a Sale / Receipt (optional, but recommended)</label>
+          <select class="form-input" id="dLinkReceipt" onchange="fillDelFromReceiptSelect()">
+            <option value="">— Fill in manually —</option>
+            ${receipts.map(r=>`<option value="${r.num}" ${base.receiptNum===r.num?"selected":""}>${r.num} — ${r.customer} — ${fmt(r.total)}</option>`).join("")}
+          </select>
+        </div>
+        <div style="font-size:11px;color:#6b7280;margin:-6px 0 14px">Picking a receipt fills in the customer's name, surname, cell number, address and every item they bought — nothing to retype.</div>
+        `:""}
         <div class="section-label" style="margin-top:0;border-top:none;padding-top:0">Customer Details</div>
         <div class="grid-2">
           <div class="form-row"><label class="form-label">Customer Name</label>
@@ -1319,6 +1361,7 @@ function viewDelNote(id){
         ${deliveryNoteHTML(d)}
         <div style="display:flex;gap:10px;margin-top:12px">
           <button class="btn-red" style="flex:1;justify-content:center" onclick="printDelNote(${id})">🖨️ Print Delivery Note</button>
+          ${d.receiptNum?`<button class="btn-black" style="flex:1;justify-content:center" onclick="printReceiptByNum('${d.receiptNum}')">🧾 Print Receipt</button>`:""}
           <button class="btn-outline" onclick="closeModal()">Close</button>
         </div>
       </div>

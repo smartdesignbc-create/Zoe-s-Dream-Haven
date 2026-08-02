@@ -271,9 +271,6 @@ tr:hover td{background:#fef2f2}
     <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="loginEmail" type="email" placeholder="you@example.com" autocomplete="username"></div>
     <div class="form-row"><label class="form-label">Password</label><input class="form-input" id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password"></div>
     <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="doLogin()">🔒 Sign In</button>
-    <div style="text-align:center;margin-top:14px">
-      <button onclick="showSignUp()" style="background:none;border:none;color:#dc0a2d;font-size:12px;font-weight:600;text-decoration:underline">First time here? Create the owner account →</button>
-    </div>
   </div>
 </div>
 
@@ -407,14 +404,16 @@ const pages = [
   {id:"suppliers", label:"Suppliers",  icon:"🏭", group:"more"},
   {id:"warehouse", label:"Warehouse",  icon:"🏬", group:"more"},
   {id:"reports",   label:"Reports",    icon:"📈", group:"more"},
-  {id:"team",      label:"Team & Access",icon:"🔐", group:"more"},
+  {id:"team",      label:"Share Access",icon:"🔗", group:"more"},
   {id:"settings",  label:"Settings",   icon:"⚙️", group:"more"},
 ];
-const morePages = pages.filter(p=>p.group==="more");
+function morePages(){
+  return pages.filter(p=>p.group==="more" && (p.id!=="team" || (currentUser && currentUser.role==="master")));
+}
 
 function renderNav(){
   const primary = pages.filter(p=>p.group==="primary");
-  const onMore = morePages.some(p=>p.id===currentPage) || currentPage==="more";
+  const onMore = morePages().some(p=>p.id===currentPage) || currentPage==="more";
   $("tabBar").innerHTML = primary.map(p =>
     `<button class="tab-btn ${currentPage===p.id?'active':''}" onclick="goPage('${p.id}')">
       <span class="ni">${p.icon}</span> ${p.label}
@@ -439,7 +438,7 @@ function pageMore(){
   return `
   <div class="panel-brand" style="margin-bottom:10px">More</div>
   <div class="more-grid">
-    ${morePages.map(p=>`
+    ${morePages().map(p=>`
       <button class="more-card" onclick="goPage('${p.id}')">
         <div class="mi">${p.icon}</div>
         <div class="ml">${p.label}</div>
@@ -459,19 +458,21 @@ function renderPage(){
   else if(currentPage==="warehouse")  c.innerHTML=pageWarehouse();
   else if(currentPage==="deliveries") c.innerHTML=pageDeliveries();
   else if(currentPage==="reports")    c.innerHTML=pageReports();
-  else if(currentPage==="team")       c.innerHTML=pageTeam();
+  else if(currentPage==="team")       { c.innerHTML=pageTeam(); if(currentUser.role==="master") renderPendingInvites(); }
   else if(currentPage==="settings")   c.innerHTML=pageSettings();
   else if(currentPage==="more")       c.innerHTML=pageMore();
 }
 
 // ══════════════════════════════════════════
-// AUTH — real Supabase Auth. Every account is a real, permanent login.
+// AUTH — permanent Master account + link-based access sharing.
+// No email confirmation anywhere in this flow — that's the entire point.
 // ══════════════════════════════════════════
-let currentUser = null;      // {id, name, email, role, mustChangePassword}
-let staffAccounts = [];      // populated from `profiles` once signed in
+let currentUser = null;      // {id, name, email, role}
+let staffAccounts = [];      // populated from `profiles` once signed in (role: 'master' | 'member')
+const inviteToken = new URLSearchParams(window.location.search).get("invite");
 
-function showLoginError(msg){ const e=$("loginError"); e.textContent=msg; e.style.display="block"; }
-function hideLoginError(){ $("loginError").style.display="none"; }
+function showLoginError(msg){ const e=$("loginError"); if(e){ e.textContent=msg; e.style.display="block"; } }
+function hideLoginError(){ const e=$("loginError"); if(e) e.style.display="none"; }
 
 async function doLogin(){
   const email=v("loginEmail").trim(), pass=v("loginPassword");
@@ -483,79 +484,25 @@ async function doLogin(){
 }
 
 async function loadCurrentUserProfile(authUser){
-  let {data:profile,error}=await sb.from("profiles").select("*").eq("id",authUser.id).single();
-
-  if((error||!profile)){
-    // No profile yet for this signed-in account. This is expected right after the very first
-    // owner confirms their email (their profile couldn't be created before they had a real,
-    // confirmed session — RLS correctly blocks that). Safe to auto-create it now, but only
-    // under the exact same condition the database itself allows: no owner exists yet.
-    const {data:existingOwners}=await sb.from("profiles").select("id").eq("role","owner").limit(1);
-    if(!existingOwners || existingOwners.length===0){
-      const name=authUser.user_metadata?.full_name || authUser.email;
-      const {data:created,error:createErr}=await sb.from("profiles").insert({
-        id:authUser.id, name, email:authUser.email, role:"owner", must_change_password:false
-      }).select().single();
-      if(createErr){
-        showLoginError("Couldn't finish setting up your owner account: "+createErr.message);
-        await sb.auth.signOut();
-        return;
-      }
-      profile=created;
-    } else {
-      showLoginError("Signed in, but no staff profile is set up for this account yet. Ask the owner to add you under Team & Access.");
-      await sb.auth.signOut();
-      return;
-    }
+  const {data:profile,error}=await sb.from("profiles").select("*").eq("id",authUser.id).single();
+  if(error||!profile){
+    showLoginError("Signed in, but this account isn't set up in this dashboard. Ask whoever shared access with you for a fresh link.");
+    await sb.auth.signOut();
+    return;
   }
-
-  // profiles.email is a display copy — keep it truthful to the real, confirmed auth email
-  // (covers the case where an email-change confirmation completed since the last login).
+  // profiles.email is a display copy — keep it truthful to the real auth email.
   if(profile.email.toLowerCase()!==authUser.email.toLowerCase()){
     await sb.from("profiles").update({email:authUser.email}).eq("id",authUser.id);
   }
-  currentUser={id:authUser.id, email:authUser.email, name:profile.name, role:profile.role, mustChangePassword:profile.must_change_password};
-  if(currentUser.mustChangePassword){ forcePasswordChange(); return; }
-  await enterApp();
-}
-
-function forcePasswordChange(){
-  $("modal").innerHTML=`
-  <div class="modal-backdrop">
-    <div class="modal-box" style="max-width:380px">
-      <div class="modal-head">
-        <div><div class="modal-title">Set Your Password</div><div class="modal-brand">Welcome, ${currentUser.name}</div></div>
-      </div>
-      <div class="modal-body">
-        <p style="font-size:12px;color:#6b7280;margin-bottom:14px">This is your first time signing in. Choose a new password only you know — you'll use it to log in from now on.</p>
-        <div class="form-row"><label class="form-label">New Password</label><input class="form-input" id="fpNew" type="password" placeholder="Minimum 6 characters"></div>
-        <div class="form-row"><label class="form-label">Confirm Password</label><input class="form-input" id="fpConfirm" type="password"></div>
-        <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="confirmPasswordChange()">✓ Set Password &amp; Sign In</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-async function confirmPasswordChange(){
-  const p1=v("fpNew"), p2=v("fpConfirm");
-  if(p1.length<6){ toast("Password must be at least 6 characters","error"); return; }
-  if(p1!==p2){ toast("Passwords don't match","error"); return; }
-  const {error:authErr}=await sb.auth.updateUser({password:p1});
-  if(authErr){ toast("Couldn't set password: "+authErr.message,"error"); return; }
-  const {error:profErr}=await sb.from("profiles").update({must_change_password:false}).eq("id",currentUser.id);
-  if(profErr){ toast("Couldn't finish setup: "+profErr.message,"error"); return; }
-  currentUser.mustChangePassword=false;
-  closeModal();
-  toast("Password set — welcome in!","success");
+  currentUser={id:authUser.id, email:authUser.email, name:profile.name, role:profile.role};
   await enterApp();
 }
 
 async function enterApp(){
   $("loginScreen").style.display="none";
   $("app").style.display="flex";
-  $("loginEmail").value=""; $("loginPassword").value="";
   $("content").innerHTML=`<div class="empty-state"><div class="es-icon">⏳</div><div class="es-title">Loading your data…</div></div>`;
-  $("userChip").innerHTML=`👤 ${currentUser.name.split(" ")[0]} <span style="opacity:.6;font-size:10px;text-transform:uppercase">· ${currentUser.role}</span> <button onclick="logout()">Logout</button>`;
+  $("userChip").innerHTML=`👤 ${currentUser.name.split(" ")[0]} <button onclick="logout()">Logout</button>`;
   await loadAllData();
   await reloadStaffAccounts();
   currentPage="dashboard"; renderNav(); renderPage();
@@ -564,7 +511,7 @@ async function enterApp(){
 async function reloadStaffAccounts(){
   const {data,error}=await sb.from("profiles").select("*").order("created_at");
   if(error){ console.error(error); return; }
-  staffAccounts=data.map(p=>({id:p.id,name:p.name,email:p.email,role:p.role,mustChangePassword:p.must_change_password}));
+  staffAccounts=data.map(p=>({id:p.id,name:p.name,email:p.email,role:p.role,createdAt:p.created_at}));
 }
 
 async function logout(){
@@ -573,42 +520,44 @@ async function logout(){
   currentUser=null;
   $("app").style.display="none";
   $("loginScreen").style.display="flex";
+  $("loginEmail").value=""; $("loginPassword").value="";
 }
 
-// ── First-time setup: create the very first owner account ──
-function showSignUp(){
+// ── Share-link redemption: anyone opening a valid invite link lands here instead of the login form ──
+function renderInviteScreen(){
   $("loginScreen").innerHTML=`
   <div class="login-card">
-    <div class="login-logo"><div class="li">🛏️</div><div class="ln">Zoe's Dream Haven</div><div class="ls">Create Owner Account</div></div>
+    <div class="login-logo"><div class="li">🛏️</div><div class="ln">Zoe's Dream Haven</div><div class="ls">You've Been Given Access</div></div>
     <div class="login-error" id="loginError"></div>
-    <div class="form-row"><label class="form-label">Your Full Name</label><input class="form-input" id="suName" placeholder="e.g. Zoe Mbatha"></div>
-    <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="suEmail" type="email" placeholder="you@example.com"></div>
-    <div class="form-row"><label class="form-label">Password</label><input class="form-input" id="suPassword" type="password" placeholder="Minimum 6 characters" onkeydown="if(event.key==='Enter')doSignUp()"></div>
-    <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="doSignUp()">✓ Create Account &amp; Sign In</button>
-    <div class="login-note">This creates the one and only owner account for this business. Everyone else is added afterwards from Team &amp; Access.</div>
-    <button class="btn-outline" style="width:100%;justify-content:center;margin-top:10px" onclick="location.reload()">← Back to Sign In</button>
+    <p style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:16px">Set up your own login below — you'll use this to sign in from now on.</p>
+    <div class="form-row"><label class="form-label">Your Full Name</label><input class="form-input" id="ivName" placeholder="e.g. Zoe Mbatha"></div>
+    <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="ivEmail" type="email" placeholder="you@example.com"></div>
+    <div class="form-row"><label class="form-label">Choose a Password</label><input class="form-input" id="ivPassword" type="password" placeholder="Minimum 6 characters" onkeydown="if(event.key==='Enter')redeemInvite()"></div>
+    <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="redeemInvite()">✓ Set Up My Login</button>
   </div>`;
 }
 
-async function doSignUp(){
-  const name=v("suName").trim(), email=v("suEmail").trim(), pass=v("suPassword");
-  const err=$("loginError");
-  if(!name||!email||!pass){ err.textContent="Please fill in every field."; err.style.display="block"; return; }
-  if(pass.length<6){ err.textContent="Password must be at least 6 characters."; err.style.display="block"; return; }
-  err.style.display="none";
-  const {data,error}=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name}}});
-  if(error){ err.textContent=error.message; err.style.display="block"; return; }
-  if(!data.session){
-    err.style.display="none";
-    $("loginScreen").innerHTML=`<div class="login-card"><div class="login-logo"><div class="li">📧</div><div class="ln">Check Your Email</div></div><p style="font-size:13px;color:#374151;text-align:center;line-height:1.6">We've sent a confirmation link to <strong>${email}</strong>. Click it, then come back and sign in.</p><button class="btn-outline" style="width:100%;justify-content:center;margin-top:16px" onclick="location.reload()">← Back to Sign In</button></div>`;
-    return;
+async function redeemInvite(){
+  const name=v("ivName").trim(), email=v("ivEmail").trim(), pass=v("ivPassword");
+  if(!name||!email||!pass){ showLoginError("Please fill in every field."); return; }
+  if(pass.length<6){ showLoginError("Password must be at least 6 characters."); return; }
+  hideLoginError();
+  const btn=document.querySelector('.login-card .btn-red');
+  if(btn){ btn.disabled=true; btn.textContent="Setting up…"; }
+  try{
+    const {data,error}=await sb.functions.invoke("redeem-invite",{body:{token:inviteToken,name,email,password:pass}});
+    if(error) throw error;
+    if(data.error){ showLoginError(data.error); return; }
+    const {data:signInData,error:signInErr}=await sb.auth.signInWithPassword({email,password:pass});
+    if(signInErr){ showLoginError("Account created — please sign in with your new email and password."); window.history.replaceState({},"",window.location.pathname); return; }
+    window.history.replaceState({},"",window.location.pathname);
+    await loadCurrentUserProfile(signInData.user);
+  }catch(err){
+    showLoginError("Something went wrong: "+err.message);
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent="✓ Set Up My Login"; }
   }
-  const {error:profErr}=await sb.from("profiles").insert({id:data.user.id,name,email,role:"owner",must_change_password:false});
-  if(profErr){ err.textContent="Account created, but the profile failed: "+profErr.message; err.style.display="block"; return; }
-  currentUser={id:data.user.id,email,name,role:"owner",mustChangePassword:false};
-  await enterApp();
 }
-
 
 // ══════════════════════════════════════════
 // DASHBOARD
@@ -2290,121 +2239,118 @@ function pageReports(){
 // TEAM & ACCESS
 // ══════════════════════════════════════════
 function pageTeam(){
+  const isMaster=currentUser.role==="master";
   return `
-  <div class="panel-brand" style="margin-bottom:10px">Team & Access</div>
+  <div class="panel-brand" style="margin-bottom:10px">Share Access</div>
   <div style="background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#9a5b1a;display:flex;align-items:center;gap:8px">
-    🔐 Real, permanent accounts. Adding someone here creates their actual login — share the temporary password with them however you like, and they'll set their own password the moment they sign in.
+    🔗 Generate a link and send it to anyone you want to give access to — WhatsApp, text, however you like. The moment they open it, they set up their own login instantly. No email confirmation, nothing to wait for.
   </div>
+  ${isMaster?`
   <div class="toolbar">
-    <span style="color:#6b7280;font-size:13px">${staffAccounts.length} people with access</span>
-    ${currentUser.role==="owner"?`<button class="btn-red" onclick="openAddStaffModal()">＋ Add Staff Member</button>`:""}
-  </div>
+    <span style="color:#6b7280;font-size:13px">${staffAccounts.length} ${staffAccounts.length===1?"person has":"people have"} access</span>
+    <button class="btn-red" onclick="generateShareLink()">🔗 Generate Share Link</button>
+  </div>` : ""}
+
   <div class="panel">
-    <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+    <div class="panel-head">People With Access</div>
+    <table><thead><tr><th>Name</th><th>Email</th><th>Joined</th>${isMaster?"<th>Actions</th>":""}</tr></thead>
     <tbody>${staffAccounts.map(a=>`
       <tr>
         <td><strong>${a.name}</strong>${a.id===currentUser.id?' <span class="badge grey">You</span>':''}</td>
         <td>${a.email}</td>
-        <td><span class="chip">${a.role}</span></td>
-        <td>${a.mustChangePassword?`<span class="badge yellow">Pending first login</span>`:`<span class="badge green">Active</span>`}</td>
-        <td>
-          ${currentUser.role==="owner" && a.id!==currentUser.id ? `
-            <button class="btn-icon" onclick="resetStaffPassword('${a.id}')" title="Reset Password">🔁</button>
-            <button class="btn-icon" onclick="removeStaff('${a.id}')" title="Remove Access">🗑️</button>
-          ` : `<span style="color:#9ca3af;font-size:11px">—</span>`}
-        </td>
+        <td>${a.createdAt?new Date(a.createdAt).toLocaleDateString("en-ZA",{day:"numeric",month:"short",year:"numeric"}):"—"}</td>
+        ${isMaster?`<td>
+          ${a.id!==currentUser.id ? `<button class="btn-icon" onclick="revokeAccess('${a.id}')" title="Revoke Access">🗑️</button>` : `<span style="color:#9ca3af;font-size:11px">—</span>`}
+        </td>`:""}
       </tr>`).join("")}
     </tbody></table>
-  </div>`;
+  </div>
+
+  ${isMaster?`
+  <div class="panel" style="margin-top:16px" id="pendingInvitesPanel">
+    <div class="panel-head">Pending Links (not opened yet)</div>
+    <div id="pendingInvitesList" style="padding:8px 0">Loading…</div>
+  </div>`:""}`;
 }
 
-function openAddStaffModal(){
+async function renderPendingInvites(){
+  const box=$("pendingInvitesList"); if(!box) return;
+  const {data,error}=await sb.from("invites").select("*").eq("status","pending").order("created_at",{ascending:false});
+  if(error){ box.innerHTML=`<p style="color:#9ca3af;font-size:12px;text-align:center;padding:12px">Couldn't load pending links.</p>`; return; }
+  if(!data.length){ box.innerHTML=`<p style="color:#9ca3af;font-size:12px;text-align:center;padding:12px">No pending links right now.</p>`; return; }
+  box.innerHTML=data.map(inv=>`
+    <div class="alert-row">
+      <span style="font-size:16px">🔗</span>
+      <span style="flex:1;font-size:12px;color:#6b7280">Created ${new Date(inv.created_at).toLocaleDateString("en-ZA",{day:"numeric",month:"short",year:"numeric"})}</span>
+      <button class="btn-icon" onclick="copyInviteLink('${inv.token}')" title="Copy Link Again">📋</button>
+      <button class="btn-icon" onclick="revokeInvite(${inv.id})" title="Cancel This Link">🗑️</button>
+    </div>`).join("");
+}
+
+function inviteUrl(token){
+  return window.location.origin + window.location.pathname + "?invite=" + token;
+}
+
+async function generateShareLink(){
+  const token = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36)+Math.random().toString(36).slice(2));
+  const {error}=await sb.from("invites").insert({token, created_by:currentUser.id, status:"pending"});
+  if(error){ toast("Couldn't create link: "+error.message,"error"); return; }
+  showShareLinkModal(token);
+  renderPendingInvites();
+}
+
+function copyInviteLink(token){
+  showShareLinkModal(token);
+}
+
+function showShareLinkModal(token){
+  const url=inviteUrl(token);
   $("modal").innerHTML=`
   <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
     <div class="modal-box" style="max-width:420px">
       <div class="modal-head">
-        <div><div class="modal-title">Add Staff Member</div><div class="modal-brand">They'll set their own password on first login</div></div>
+        <div><div class="modal-title">Share This Link</div><div class="modal-brand">One-time use — works for one person only</div></div>
         <button class="close-btn" onclick="closeModal()">✕</button>
       </div>
       <div class="modal-body">
-        <div class="form-row"><label class="form-label">Full Name</label><input class="form-input" id="stName" placeholder="e.g. Nomsa Khumalo"></div>
-        <div class="form-row"><label class="form-label">Email Address</label><input class="form-input" id="stEmail" type="email" placeholder="name@example.com"></div>
-        <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="addStaff()">✓ Create Temporary Login</button>
+        <p style="font-size:12px;color:#6b7280;margin-bottom:12px">Send this to the person you want to give access to (WhatsApp, SMS, however). The moment they open it, they'll set up their own name, email and password — no waiting, no confirmation emails.</p>
+        <div class="form-row"><input class="form-input" id="shareLinkBox" value="${url}" readonly onclick="this.select()"></div>
+        <button class="btn-red" style="width:100%;justify-content:center" onclick="copyToClipboard()">📋 Copy Link</button>
+        <button class="btn-outline" style="width:100%;justify-content:center;margin-top:10px" onclick="closeModal()">Done</button>
       </div>
     </div>
   </div>`;
 }
 
-async function callManageStaff(payload){
-  const {data,error}=await sb.functions.invoke("manage-staff",{body:payload});
-  if(error){
-    let msg=error.message;
-    try{ const ctx=await error.context.json(); if(ctx.error) msg=ctx.error; }catch(e){}
-    throw new Error(msg);
-  }
-  if(data && data.error) throw new Error(data.error);
-  return data;
+function copyToClipboard(){
+  const box=$("shareLinkBox");
+  box.select();
+  navigator.clipboard?.writeText(box.value).then(()=>toast("Link copied","success")).catch(()=>{
+    document.execCommand("copy"); toast("Link copied","success");
+  });
 }
 
-async function addStaff(){
-  const name=v("stName").trim(), email=v("stEmail").trim().toLowerCase();
-  if(!name||!email){ toast("Please enter a name and email","error"); return; }
-  if(staffAccounts.find(a=>a.email.toLowerCase()===email)){ toast("That email already has access","error"); return; }
-  try{
-    const result=await callManageStaff({action:"invite",name,email});
-    closeModal();
-    await reloadStaffAccounts();
-    renderPage();
-    showCredentialModal(name,email,result.tempPassword,"created");
-  }catch(err){
-    toast("Couldn't add staff member: "+err.message,"error");
-  }
+async function revokeInvite(id){
+  if(!confirm("Cancel this share link? It will stop working if someone tries to open it.")) return;
+  const {error}=await sb.from("invites").update({status:"revoked"}).eq("id",id);
+  if(error){ toast("Couldn't cancel link: "+error.message,"error"); return; }
+  toast("Link cancelled","success");
+  renderPendingInvites();
 }
 
-async function resetStaffPassword(id){
+async function revokeAccess(id){
   const a=staffAccounts.find(x=>x.id===id);
-  if(!confirm(`Reset ${a.name}'s password? Their current password will stop working immediately.`)) return;
+  if(!confirm(`Revoke ${a.name}'s access? They won't be able to log in anymore.`)) return;
   try{
-    const result=await callManageStaff({action:"reset",userId:id});
+    const {data,error}=await sb.functions.invoke("manage-staff",{body:{action:"remove",userId:id}});
+    if(error) throw error;
+    if(data.error) throw new Error(data.error);
     await reloadStaffAccounts();
-    renderPage();
-    showCredentialModal(a.name,a.email,result.tempPassword,"reset");
-  }catch(err){
-    toast("Couldn't reset password: "+err.message,"error");
-  }
-}
-
-async function removeStaff(id){
-  const a=staffAccounts.find(x=>x.id===id);
-  if(!confirm(`Remove ${a.name}'s access? They won't be able to log in anymore.`)) return;
-  try{
-    await callManageStaff({action:"remove",userId:id});
-    await reloadStaffAccounts();
-    toast(`${a.name}'s access removed`,"success");
+    toast(`${a.name}'s access revoked`,"success");
     renderPage();
   }catch(err){
-    toast("Couldn't remove access: "+err.message,"error");
+    toast("Couldn't revoke access: "+err.message,"error");
   }
-}
-
-function showCredentialModal(name,email,temp,mode){
-  $("modal").innerHTML=`
-  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
-    <div class="modal-box" style="max-width:400px">
-      <div class="modal-head">
-        <div><div class="modal-title">${mode==="created"?"Login Created":"Password Reset"}</div><div class="modal-brand">${name}</div></div>
-        <button class="close-btn" onclick="closeModal()">✕</button>
-      </div>
-      <div class="modal-body">
-        <p style="font-size:12px;color:#6b7280;margin-bottom:12px">Share these details with ${name} however you like (WhatsApp, in person, etc.). They'll be asked to set their own password the moment they log in.</p>
-        <div class="receipt-preview" style="text-align:left">
-          <div class="r-row"><span>Email:</span><span><strong>${email}</strong></span></div>
-          <div class="r-row"><span>Temporary Password:</span><span><strong>${temp}</strong></span></div>
-        </div>
-        <button class="btn-red" style="width:100%;justify-content:center;margin-top:14px" onclick="closeModal()">Done</button>
-      </div>
-    </div>
-  </div>`;
 }
 
 // ══════════════════════════════════════════
@@ -2428,39 +2374,21 @@ function pageSettings(){
     </div>
 
     <div class="panel" style="margin-top:16px">
-      <div class="panel-head">Change Login Details</div>
-      <p style="font-size:12px;color:#6b7280;margin-bottom:12px">Signed in as <strong>${currentUser.email}</strong>. Use this when handing the system over — switch the email and password to the new owner's, right there in front of them.</p>
-      <div class="form-row"><label class="form-label">New Email Address</label><input class="form-input" id="cldEmail" value="${currentUser.email}"></div>
-      <div class="form-row"><label class="form-label">New Password</label><input class="form-input" id="cldPass" type="password" placeholder="Leave blank to keep current password"></div>
-      <button class="btn-black" onclick="changeLoginDetails()">🔐 Update Login Details</button>
+      <div class="panel-head">Change My Password</div>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:12px">Signed in as <strong>${currentUser.email}</strong>.</p>
+      <div class="form-row"><label class="form-label">New Password</label><input class="form-input" id="cldPass" type="password" placeholder="Minimum 6 characters"></div>
+      <button class="btn-black" onclick="changeMyPassword()">🔐 Update Password</button>
     </div>
   </div>`;
 }
 
-async function changeLoginDetails(){
-  const email=v("cldEmail").trim(), pass=v("cldPass");
-  if(!email){ toast("Email can't be empty","error"); return; }
-  if(pass && pass.length<6){ toast("Password must be at least 6 characters","error"); return; }
-
-  const updatePayload={};
-  if(email && email.toLowerCase()!==currentUser.email.toLowerCase()) updatePayload.email=email;
-  if(pass) updatePayload.password=pass;
-
-  if(Object.keys(updatePayload).length===0){ toast("Nothing to update","error"); return; }
-
-  const {data,error}=await sb.auth.updateUser(updatePayload);
-  if(error){ toast("Couldn't update login details: "+error.message,"error"); return; }
-
-  // Note: if the email changed, the real auth email only updates once the confirmation link is
-  // clicked — profiles.email will self-correct automatically the next time this account logs in.
-  currentUser.email=email;
-
-  if(updatePayload.email){
-    toast("A confirmation email has been sent to "+email+". Click the link in that email to finish switching the login over.","success");
-  } else {
-    toast("Password updated","success");
-  }
-  renderPage();
+async function changeMyPassword(){
+  const pass=v("cldPass");
+  if(!pass || pass.length<6){ toast("Password must be at least 6 characters","error"); return; }
+  const {error}=await sb.auth.updateUser({password:pass});
+  if(error){ toast("Couldn't update password: "+error.message,"error"); return; }
+  $("cldPass").value="";
+  toast("Password updated","success");
 }
 
 async function saveSettings(){
@@ -2481,8 +2409,13 @@ $("dateChip").textContent=new Date().toLocaleDateString("en-ZA",{day:"numeric",m
 ["loginEmail","loginPassword"].forEach(id=>{
   $(id).addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
 });
-// If there's already a valid, signed-in session (browser remembers it), skip straight past the login screen.
 (async()=>{
+  if(inviteToken){
+    // Someone opened a share link — show the "set up your login" screen instead of the normal login form.
+    renderInviteScreen();
+    return;
+  }
+  // If there's already a valid, signed-in session (browser remembers it), skip straight past the login screen.
   const {data}=await sb.auth.getSession();
   if(data.session){ await loadCurrentUserProfile(data.session.user); }
 })();

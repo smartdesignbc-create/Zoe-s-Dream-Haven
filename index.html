@@ -4,6 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Zoe's Dream Haven</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
@@ -269,7 +271,9 @@ tr:hover td{background:#fef2f2}
     <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="loginEmail" type="email" placeholder="you@example.com" autocomplete="username"></div>
     <div class="form-row"><label class="form-label">Password</label><input class="form-input" id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password"></div>
     <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="doLogin()">🔒 Sign In</button>
-    <div class="login-note">🚧 <strong>Demo login</strong> — try <strong>admin@demo.com</strong> / <strong>admin123</strong>. Real, permanent accounts (one per person, owner-managed) switch on once this is connected to Supabase in the next phase.</div>
+    <div style="text-align:center;margin-top:14px">
+      <button onclick="showSignUp()" style="background:none;border:none;color:#dc0a2d;font-size:12px;font-weight:600;text-decoration:underline">First time here? Create the owner account →</button>
+    </div>
   </div>
 </div>
 
@@ -296,18 +300,80 @@ tr:hover td{background:#fef2f2}
 
 <script>
 // ══════════════════════════════════════════
-// DATA — clean slate, ready for the live presentation.
-// Real data will persist permanently once connected to Supabase (Phase 3).
+// DATA — now backed permanently by Supabase.
 // ══════════════════════════════════════════
+const SUPABASE_URL = "https://ggphlaphlgkxicjomgqk.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdncGhsYXBobGdreGljam9tZ3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1MTg3NTMsImV4cCI6MjEwMTA5NDc1M30.FlCw9SqsuFGbUFxSNufhMp2LQMACLUGGcKM3OOXWFT0";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 let products = [];
 let customers = [];
 let suppliers = [];
 let sales = [];
 let receipts = [];
 let deliveries = [];
-let deliveryCounter = 1;
-let receiptCounter = 1;
-let settings = {name:"Zoe's Dream Haven",phone:"031 555 0000",email:"info@zoesdreamhaven.co.za",address:"123 Bed Street, Durban, KZN"};
+let laybys = [];
+let settings = {name:"Zoe's Dream Haven",phone:"031 555 0000",email:"info@zoesdreamhaven.co.za",address:"123 Bed Street, Durban, KZN",vatRate:15,vatNumber:""};
+
+// ── DB <-> app field mapping (DB uses snake_case; the app's render code expects these exact names) ──
+const mapProduct   = p => ({id:p.id, name:p.name, cat:p.category, supplier:p.supplier, cost:+p.cost, price:+p.price, stock:p.stock,
+  warehouseStock:p.warehouse_stock, tradePrice:+p.trade_price, markup:+p.markup, sellingPrice:+p.selling_price,
+  vatAmount:+p.vat_amount, totalSellingPrice:+p.total_selling_price});
+const mapCustomer  = c => ({id:c.id, name:c.name, surname:c.surname||"", phone:c.phone||"", address:c.address||"", email:c.email||"", vatNumber:c.vat_number||""});
+const mapSupplier  = s => ({id:s.id, name:s.name, contact:s.contact||"", phone:s.phone||"", email:s.email||""});
+const mapSale      = s => ({id:s.id, date:s.sale_date, customer:s.customer, items:s.items||[], total:+s.total, method:s.method, receiptNum:s.receipt_num});
+const mapReceipt   = r => ({id:r.id, num:r.num, date:r.receipt_date, customer:r.customer, surname:r.surname||"", phone:r.phone||"",
+  email:r.email||"", address:r.address||"", customerVatNumber:r.customer_vat_number||"", items:r.items||[],
+  total:+r.total, subtotal:+r.subtotal, vatAmount:+r.vat_amount, method:r.method, status:r.status});
+const mapDelivery  = d => ({id:d.id, note:d.note, customer:d.customer, surname:d.surname||"", phone:d.phone||"", address:d.address, date:d.delivery_date, driver:d.driver||"", status:d.status, items:d.items||[], receiptNum:d.receipt_num});
+const mapLayby     = l => ({id:l.id, num:l.layby_num, customer:l.customer, surname:l.surname||"", phone:l.phone||"", items:l.items||[], originalTotal:+l.original_total, totalPaid:+l.total_paid, outstandingBalance:+l.outstanding_balance, status:l.status, createdAt:l.created_at, completedAt:l.completed_at});
+
+async function reloadTable(name){
+  try{
+    if(name==="products"){  const {data,error}=await sb.from("products").select("*").order("id"); if(error) throw error; products=data.map(mapProduct); }
+    if(name==="customers"){ const {data,error}=await sb.from("customers").select("*").order("id"); if(error) throw error; customers=data.map(mapCustomer); }
+    if(name==="suppliers"){ const {data,error}=await sb.from("suppliers").select("*").order("id"); if(error) throw error; suppliers=data.map(mapSupplier); }
+    if(name==="sales"){     const {data,error}=await sb.from("sales").select("*").order("id",{ascending:false}); if(error) throw error; sales=data.map(mapSale); }
+    if(name==="receipts"){  const {data,error}=await sb.from("receipts").select("*").order("id",{ascending:false}); if(error) throw error; receipts=data.map(mapReceipt); }
+    if(name==="deliveries"){const {data,error}=await sb.from("deliveries").select("*").order("id",{ascending:false}); if(error) throw error; deliveries=data.map(mapDelivery); }
+    if(name==="laybys"){    const {data,error}=await sb.from("laybys").select("*").order("id",{ascending:false}); if(error) throw error; laybys=data.map(mapLayby); }
+    if(name==="settings"){  const {data,error}=await sb.from("settings").select("*").eq("id",1).single(); if(error) throw error; settings={name:data.name,phone:data.phone,email:data.email,address:data.address,vatRate:+data.vat_rate,vatNumber:data.vat_number||""}; }
+  }catch(err){
+    console.error(`Failed to load ${name}:`,err);
+    toast(`Couldn't load ${name} from the database`,"error");
+  }
+}
+
+async function loadAllData(){
+  await Promise.all([
+    reloadTable("products"), reloadTable("customers"), reloadTable("suppliers"),
+    reloadTable("sales"), reloadTable("receipts"), reloadTable("deliveries"), reloadTable("laybys"), reloadTable("settings")
+  ]);
+}
+
+// Generates a unique friendly reference (e.g. ZDH-004), retrying on the rare chance of a collision.
+async function nextRef(prefix, existingList, field){
+  let n = existingList.length + 1;
+  for(let i=0;i<20;i++){
+    const candidate = prefix + String(n).padStart(3,"0");
+    if(!existingList.find(x=>x[field]===candidate)) return candidate;
+    n++;
+  }
+  return prefix + Date.now().toString().slice(-6);
+}
+
+// Snapshot a customer's current details, so a receipt keeps showing what was true at the time
+// of sale even if the customer's profile gets edited later.
+function customerSnapshot(name){
+  const c=customers.find(x=>x.name.toLowerCase()===(name||"").toLowerCase());
+  return {surname:c?c.surname||"":"", email:c?c.email||"":"", address:c?c.address||"":"", vatNumber:c?c.vatNumber||"":""};
+}
+
+// Splits a VAT-inclusive total into its excl.-VAT subtotal and VAT portion, using the current business VAT rate.
+function vatBreakdown(total){
+  const subtotal = total/(1+settings.vatRate/100);
+  return {subtotal, vatAmount: total-subtotal};
+}
 
 // ══════════════════════════════════════════
 // HELPERS
@@ -321,7 +387,10 @@ function toast(msg,type){
   setTimeout(()=>{ el.classList.add("out"); setTimeout(()=>el.remove(),220); },2600);
 }
 const fmt  = n => "R " + Number(n).toLocaleString("en-ZA",{minimumFractionDigits:2});
-const today = () => new Date().toISOString().slice(0,10);
+const today = () => localDateStr(new Date());
+function localDateStr(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
 const v    = id => { const el=document.getElementById(id); return el?el.value:""; };
 const $    = id => document.getElementById(id);
 let currentPage = "dashboard";
@@ -330,11 +399,13 @@ let searchVal   = "";
 const pages = [
   {id:"dashboard", label:"Dashboard",  icon:"📊", group:"primary"},
   {id:"sales",     label:"Sales",      icon:"🛒", group:"primary"},
+  {id:"laybys",    label:"Lay-bys",    icon:"⏳", group:"primary"},
   {id:"inventory", label:"Inventory",  icon:"📦", group:"primary"},
   {id:"receipts",  label:"Receipts",   icon:"🧾", group:"primary"},
   {id:"deliveries",label:"Deliveries", icon:"🚚", group:"primary"},
   {id:"customers", label:"Customers",  icon:"👥", group:"primary"},
   {id:"suppliers", label:"Suppliers",  icon:"🏭", group:"more"},
+  {id:"warehouse", label:"Warehouse",  icon:"🏬", group:"more"},
   {id:"reports",   label:"Reports",    icon:"📈", group:"more"},
   {id:"team",      label:"Team & Access",icon:"🔐", group:"more"},
   {id:"settings",  label:"Settings",   icon:"⚙️", group:"more"},
@@ -381,9 +452,11 @@ function renderPage(){
   if(currentPage==="dashboard")  c.innerHTML=pageDashboard();
   else if(currentPage==="inventory")  c.innerHTML=pageInventory();
   else if(currentPage==="sales")      c.innerHTML=pageSales();
+  else if(currentPage==="laybys")     c.innerHTML=pageLaybys();
   else if(currentPage==="receipts")   c.innerHTML=pageReceipts();
   else if(currentPage==="customers")  c.innerHTML=pageCustomers();
   else if(currentPage==="suppliers")  c.innerHTML=pageSuppliers();
+  else if(currentPage==="warehouse")  c.innerHTML=pageWarehouse();
   else if(currentPage==="deliveries") c.innerHTML=pageDeliveries();
   else if(currentPage==="reports")    c.innerHTML=pageReports();
   else if(currentPage==="team")       c.innerHTML=pageTeam();
@@ -392,63 +465,148 @@ function renderPage(){
 }
 
 // ══════════════════════════════════════════
-// AUTH (demo, in-memory — replaced by Supabase Auth in Phase 2)
+// AUTH — real Supabase Auth. Every account is a real, permanent login.
 // ══════════════════════════════════════════
-let staffAccounts = [
-  {id:1, name:"Store Owner (Demo)", email:"admin@demo.com", password:"admin123", role:"owner", mustChangePassword:false},
-];
-let currentUser = null;
+let currentUser = null;      // {id, name, email, role, mustChangePassword}
+let staffAccounts = [];      // populated from `profiles` once signed in
 
-function doLogin(){
-  const email=v("loginEmail").trim().toLowerCase(), pass=v("loginPassword");
-  const acc=staffAccounts.find(a=>a.email.toLowerCase()===email && a.password===pass);
-  const err=$("loginError");
-  if(!acc){ err.textContent="Email or password is incorrect."; err.style.display="block"; return; }
-  err.style.display="none";
-  if(acc.mustChangePassword){ forcePasswordChange(acc); return; }
-  currentUser=acc; enterApp();
+function showLoginError(msg){ const e=$("loginError"); e.textContent=msg; e.style.display="block"; }
+function hideLoginError(){ $("loginError").style.display="none"; }
+
+async function doLogin(){
+  const email=v("loginEmail").trim(), pass=v("loginPassword");
+  if(!email||!pass){ showLoginError("Please enter your email and password."); return; }
+  hideLoginError();
+  const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){ showLoginError(error.message==="Invalid login credentials"?"Email or password is incorrect.":error.message); return; }
+  await loadCurrentUserProfile(data.user);
 }
 
-function forcePasswordChange(acc){
+async function loadCurrentUserProfile(authUser){
+  let {data:profile,error}=await sb.from("profiles").select("*").eq("id",authUser.id).single();
+
+  if((error||!profile)){
+    // No profile yet for this signed-in account. This is expected right after the very first
+    // owner confirms their email (their profile couldn't be created before they had a real,
+    // confirmed session — RLS correctly blocks that). Safe to auto-create it now, but only
+    // under the exact same condition the database itself allows: no owner exists yet.
+    const {data:existingOwners}=await sb.from("profiles").select("id").eq("role","owner").limit(1);
+    if(!existingOwners || existingOwners.length===0){
+      const name=authUser.user_metadata?.full_name || authUser.email;
+      const {data:created,error:createErr}=await sb.from("profiles").insert({
+        id:authUser.id, name, email:authUser.email, role:"owner", must_change_password:false
+      }).select().single();
+      if(createErr){
+        showLoginError("Couldn't finish setting up your owner account: "+createErr.message);
+        await sb.auth.signOut();
+        return;
+      }
+      profile=created;
+    } else {
+      showLoginError("Signed in, but no staff profile is set up for this account yet. Ask the owner to add you under Team & Access.");
+      await sb.auth.signOut();
+      return;
+    }
+  }
+
+  // profiles.email is a display copy — keep it truthful to the real, confirmed auth email
+  // (covers the case where an email-change confirmation completed since the last login).
+  if(profile.email.toLowerCase()!==authUser.email.toLowerCase()){
+    await sb.from("profiles").update({email:authUser.email}).eq("id",authUser.id);
+  }
+  currentUser={id:authUser.id, email:authUser.email, name:profile.name, role:profile.role, mustChangePassword:profile.must_change_password};
+  if(currentUser.mustChangePassword){ forcePasswordChange(); return; }
+  await enterApp();
+}
+
+function forcePasswordChange(){
   $("modal").innerHTML=`
   <div class="modal-backdrop">
     <div class="modal-box" style="max-width:380px">
       <div class="modal-head">
-        <div><div class="modal-title">Set Your Password</div><div class="modal-brand">Welcome, ${acc.name}</div></div>
+        <div><div class="modal-title">Set Your Password</div><div class="modal-brand">Welcome, ${currentUser.name}</div></div>
       </div>
       <div class="modal-body">
         <p style="font-size:12px;color:#6b7280;margin-bottom:14px">This is your first time signing in. Choose a new password only you know — you'll use it to log in from now on.</p>
         <div class="form-row"><label class="form-label">New Password</label><input class="form-input" id="fpNew" type="password" placeholder="Minimum 6 characters"></div>
         <div class="form-row"><label class="form-label">Confirm Password</label><input class="form-input" id="fpConfirm" type="password"></div>
-        <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="confirmPasswordChange(${acc.id})">✓ Set Password &amp; Sign In</button>
+        <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="confirmPasswordChange()">✓ Set Password &amp; Sign In</button>
       </div>
     </div>
   </div>`;
 }
 
-function confirmPasswordChange(id){
+async function confirmPasswordChange(){
   const p1=v("fpNew"), p2=v("fpConfirm");
   if(p1.length<6){ toast("Password must be at least 6 characters","error"); return; }
   if(p1!==p2){ toast("Passwords don't match","error"); return; }
-  staffAccounts=staffAccounts.map(a=>a.id===id?{...a,password:p1,mustChangePassword:false}:a);
-  currentUser=staffAccounts.find(a=>a.id===id);
-  closeModal(); enterApp();
+  const {error:authErr}=await sb.auth.updateUser({password:p1});
+  if(authErr){ toast("Couldn't set password: "+authErr.message,"error"); return; }
+  const {error:profErr}=await sb.from("profiles").update({must_change_password:false}).eq("id",currentUser.id);
+  if(profErr){ toast("Couldn't finish setup: "+profErr.message,"error"); return; }
+  currentUser.mustChangePassword=false;
+  closeModal();
   toast("Password set — welcome in!","success");
+  await enterApp();
 }
 
-function enterApp(){
+async function enterApp(){
   $("loginScreen").style.display="none";
   $("app").style.display="flex";
   $("loginEmail").value=""; $("loginPassword").value="";
+  $("content").innerHTML=`<div class="empty-state"><div class="es-icon">⏳</div><div class="es-title">Loading your data…</div></div>`;
   $("userChip").innerHTML=`👤 ${currentUser.name.split(" ")[0]} <span style="opacity:.6;font-size:10px;text-transform:uppercase">· ${currentUser.role}</span> <button onclick="logout()">Logout</button>`;
+  await loadAllData();
+  await reloadStaffAccounts();
   currentPage="dashboard"; renderNav(); renderPage();
 }
 
-function logout(){
+async function reloadStaffAccounts(){
+  const {data,error}=await sb.from("profiles").select("*").order("created_at");
+  if(error){ console.error(error); return; }
+  staffAccounts=data.map(p=>({id:p.id,name:p.name,email:p.email,role:p.role,mustChangePassword:p.must_change_password}));
+}
+
+async function logout(){
   if(!confirm("Sign out?")) return;
+  await sb.auth.signOut();
   currentUser=null;
   $("app").style.display="none";
   $("loginScreen").style.display="flex";
+}
+
+// ── First-time setup: create the very first owner account ──
+function showSignUp(){
+  $("loginScreen").innerHTML=`
+  <div class="login-card">
+    <div class="login-logo"><div class="li">🛏️</div><div class="ln">Zoe's Dream Haven</div><div class="ls">Create Owner Account</div></div>
+    <div class="login-error" id="loginError"></div>
+    <div class="form-row"><label class="form-label">Your Full Name</label><input class="form-input" id="suName" placeholder="e.g. Zoe Mbatha"></div>
+    <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="suEmail" type="email" placeholder="you@example.com"></div>
+    <div class="form-row"><label class="form-label">Password</label><input class="form-input" id="suPassword" type="password" placeholder="Minimum 6 characters" onkeydown="if(event.key==='Enter')doSignUp()"></div>
+    <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="doSignUp()">✓ Create Account &amp; Sign In</button>
+    <div class="login-note">This creates the one and only owner account for this business. Everyone else is added afterwards from Team &amp; Access.</div>
+    <button class="btn-outline" style="width:100%;justify-content:center;margin-top:10px" onclick="location.reload()">← Back to Sign In</button>
+  </div>`;
+}
+
+async function doSignUp(){
+  const name=v("suName").trim(), email=v("suEmail").trim(), pass=v("suPassword");
+  const err=$("loginError");
+  if(!name||!email||!pass){ err.textContent="Please fill in every field."; err.style.display="block"; return; }
+  if(pass.length<6){ err.textContent="Password must be at least 6 characters."; err.style.display="block"; return; }
+  err.style.display="none";
+  const {data,error}=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name}}});
+  if(error){ err.textContent=error.message; err.style.display="block"; return; }
+  if(!data.session){
+    err.style.display="none";
+    $("loginScreen").innerHTML=`<div class="login-card"><div class="login-logo"><div class="li">📧</div><div class="ln">Check Your Email</div></div><p style="font-size:13px;color:#374151;text-align:center;line-height:1.6">We've sent a confirmation link to <strong>${email}</strong>. Click it, then come back and sign in.</p><button class="btn-outline" style="width:100%;justify-content:center;margin-top:16px" onclick="location.reload()">← Back to Sign In</button></div>`;
+    return;
+  }
+  const {error:profErr}=await sb.from("profiles").insert({id:data.user.id,name,email,role:"owner",must_change_password:false});
+  if(profErr){ err.textContent="Account created, but the profile failed: "+profErr.message; err.style.display="block"; return; }
+  currentUser={id:data.user.id,email,name,role:"owner",mustChangePassword:false};
+  await enterApp();
 }
 
 
@@ -554,23 +712,23 @@ function pageInventory(){
   const q=searchVal.toLowerCase();
   const list=products.filter(p=>p.name.toLowerCase().includes(q)||p.cat.toLowerCase().includes(q));
   return `
-  <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Inventory</div>
+  <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Inventory — Main Shop</div>
   <div class="toolbar">
     <div class="search-box">🔍 <input placeholder="Search products…" oninput="searchVal=this.value;renderPage()" value="${searchVal}"></div>
     <button class="btn-red" onclick="openProductModal(null)">＋ Add Product</button>
   </div>
   <div class="panel">
-    <table><thead><tr><th>Name</th><th>Category</th><th>Supplier</th><th>Cost</th><th>Price</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
+    <table><thead><tr><th>Name</th><th>Category</th><th>Selling Price (incl. VAT)</th><th>Main Shop</th><th>Warehouse</th><th>Status</th><th>Actions</th></tr></thead>
     <tbody>${list.map(p=>`
       <tr>
         <td><strong>${p.name}</strong></td>
         <td><span class="chip">${p.cat}</span></td>
-        <td>${p.supplier}</td>
-        <td>${fmt(p.cost)}</td>
-        <td>${fmt(p.price)}</td>
+        <td><strong>${fmt(p.totalSellingPrice)}</strong></td>
         <td><strong>${p.stock}</strong></td>
+        <td>${p.warehouseStock}${p.warehouseStock>0?` <button class="btn-icon" onclick="openTransferModal(${p.id},'to_main')" title="Transfer to Main Shop">⬅️</button>`:""}</td>
         <td><span class="badge ${p.stock<=4?'red':p.stock<=8?'yellow':'green'}">${p.stock<=4?"Low Stock":p.stock<=8?"Limited":"In Stock"}</span></td>
         <td>
+          <button class="btn-icon" onclick="openTransferModal(${p.id},'to_warehouse')" title="Transfer to Warehouse">➡️</button>
           <button class="btn-icon" onclick="openProductModal(${p.id})" title="Edit">✏️</button>
           <button class="btn-icon" onclick="delProduct(${p.id})" title="Delete">🗑️</button>
         </td>
@@ -580,7 +738,12 @@ function pageInventory(){
   </div>`;
 }
 
-function delProduct(id){ if(confirm("Delete this product?")){ products=products.filter(p=>p.id!==id); renderPage(); } }
+async function delProduct(id){
+  if(!confirm("Delete this product?")) return;
+  const {error}=await sb.from("products").delete().eq("id",id);
+  if(error){ toast("Delete failed: "+error.message,"error"); return; }
+  await reloadTable("products"); renderPage();
+}
 
 function openProductModal(id){
   const p=id?products.find(x=>x.id===id):null;
@@ -604,25 +767,143 @@ function openProductModal(id){
             <datalist id="supList">${suppliers.map(s=>`<option value="${s.name}">`).join("")}</datalist>
           </div>
         </div>
-        <div class="grid-3">
-          <div class="form-row"><label class="form-label">Cost (R)</label><input class="form-input" type="number" id="mCost" value="${p?p.cost:''}"></div>
-          <div class="form-row"><label class="form-label">Price (R)</label><input class="form-input" type="number" id="mPrice" value="${p?p.price:''}"></div>
-          <div class="form-row"><label class="form-label">Stock</label><input class="form-input" type="number" id="mStock" value="${p?p.stock:''}"></div>
+
+        <div class="section-label" style="margin-top:0;border-top:none;padding-top:0">Pricing</div>
+        <div class="grid-2">
+          <div class="form-row"><label class="form-label">Trade Price (R)</label><input class="form-input" type="number" id="mTrade" value="${p?p.tradePrice:''}" oninput="updatePricePreview()"></div>
+          <div class="form-row"><label class="form-label">Markup (R)</label><input class="form-input" type="number" id="mMarkup" value="${p?p.markup:''}" oninput="updatePricePreview()"></div>
         </div>
+        <div class="receipt-preview" style="margin-bottom:14px">
+          <div class="r-row"><span>Selling Price (excl. VAT)</span><span id="pvSelling">R 0.00</span></div>
+          <div class="r-row"><span>VAT (${settings.vatRate}%)</span><span id="pvVat">R 0.00</span></div>
+          <div class="r-divider"></div>
+          <div class="r-row" style="font-weight:700"><span>Total Selling Price</span><span id="pvTotal">R 0.00</span></div>
+        </div>
+        <div class="form-row"><label class="form-label">Cost Price (R) — for your own margin tracking, not shown to customers</label><input class="form-input" type="number" id="mCost" value="${p?p.cost:''}"></div>
+
+        <div class="section-label">Stock</div>
+        <div class="grid-2">
+          <div class="form-row"><label class="form-label">Main Shop Stock</label><input class="form-input" type="number" id="mStock" value="${p?p.stock:'0'}"></div>
+          <div class="form-row"><label class="form-label">Warehouse Stock</label><input class="form-input" type="number" id="mWhStock" value="${p?p.warehouseStock:'0'}"></div>
+        </div>
+        <div style="font-size:11px;color:#6b7280;margin:-6px 0 14px">💡 Day to day, move stock between locations with the ➡️/⬅️ transfer buttons — these fields are for setup or corrections.</div>
+
         <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="saveProduct(${id||'null'})">✓ Save Product</button>
+      </div>
+    </div>
+  </div>`;
+  updatePricePreview();
+}
+
+function updatePricePreview(){
+  const trade=+v("mTrade")||0, markup=+v("mMarkup")||0;
+  const selling=trade+markup;
+  const vat=selling*(settings.vatRate/100);
+  const total=selling+vat;
+  if($("pvSelling")) $("pvSelling").textContent=fmt(selling);
+  if($("pvVat")) $("pvVat").textContent=fmt(vat);
+  if($("pvTotal")) $("pvTotal").textContent=fmt(total);
+}
+
+async function saveProduct(id){
+  const trade=+v("mTrade")||0, markup=+v("mMarkup")||0;
+  const sellingPrice=trade+markup;
+  const vatAmount=sellingPrice*(settings.vatRate/100);
+  const totalSellingPrice=sellingPrice+vatAmount;
+  const d={
+    name:v("mName"), category:v("mCat").trim()||"Uncategorised", supplier:v("mSup").trim()||"—",
+    cost:+v("mCost"), trade_price:trade, markup, selling_price:sellingPrice, vat_amount:vatAmount,
+    total_selling_price:totalSellingPrice, price:totalSellingPrice,
+    stock:+v("mStock")||0, warehouse_stock:+v("mWhStock")||0
+  };
+  if(!d.name.trim()){ toast("Please enter a product name","error"); return; }
+  let error;
+  if(id) ({error}=await sb.from("products").update(d).eq("id",id));
+  else   ({error}=await sb.from("products").insert(d));
+  if(error){ toast("Couldn't save product: "+error.message,"error"); return; }
+  if(d.supplier!=="—" && !suppliers.find(s=>s.name.toLowerCase()===d.supplier.toLowerCase())){
+    await sb.from("suppliers").insert({name:d.supplier,contact:"",phone:"",email:""});
+    await reloadTable("suppliers");
+  }
+  await reloadTable("products");
+  toast("Product saved","success");
+  closeModal(); renderPage();
+}
+
+// ══════════════════════════════════════════
+// WAREHOUSE & STOCK TRANSFERS
+// ══════════════════════════════════════════
+function pageWarehouse(){
+  const q=searchVal.toLowerCase();
+  const list=products.filter(p=>p.name.toLowerCase().includes(q)||p.cat.toLowerCase().includes(q));
+  return `
+  <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Warehouse</div>
+  <div style="background:#fff1f2;border:1.5px solid #fecdd3;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#7a0a1f">
+    💡 The Warehouse is a separate holding location. Supplier deliveries always come into the Main Shop first — move stock here when you need to.
+  </div>
+  <div class="toolbar">
+    <div class="search-box">🔍 <input placeholder="Search products…" oninput="searchVal=this.value;renderPage()" value="${searchVal}"></div>
+  </div>
+  <div class="panel">
+    <table><thead><tr><th>Name</th><th>Category</th><th>Warehouse Stock</th><th>Main Shop Stock</th><th>Actions</th></tr></thead>
+    <tbody>${list.map(p=>`
+      <tr>
+        <td><strong>${p.name}</strong></td>
+        <td><span class="chip">${p.cat}</span></td>
+        <td><strong>${p.warehouseStock}</strong></td>
+        <td>${p.stock}</td>
+        <td>${p.warehouseStock>0?`<button class="btn-black" onclick="openTransferModal(${p.id},'to_main')">⬅️ Transfer to Main Shop</button>`:`<span style="color:#9ca3af;font-size:11px">Nothing to transfer</span>`}</td>
+      </tr>`).join("")}
+    </tbody></table>
+    ${list.length===0?`<div class="empty-state"><div class="es-icon">🏬</div><div class="es-title">No products yet</div><div class="es-sub">Add products in Inventory first, then transfer stock here.</div></div>`:""}
+  </div>`;
+}
+
+function openTransferModal(productId, direction){
+  const p=products.find(x=>x.id===productId);
+  const toWarehouse = direction==="to_warehouse";
+  const available = toWarehouse ? p.stock : p.warehouseStock;
+  $("modal").innerHTML=`
+  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box" style="max-width:380px">
+      <div class="modal-head">
+        <div><div class="modal-title">Transfer Stock</div><div class="modal-brand">${p.name}</div></div>
+        <button class="close-btn" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:13px;color:#374151;margin-bottom:14px">
+          Moving stock <strong>${toWarehouse?"from Main Shop → Warehouse":"from Warehouse → Main Shop"}</strong>.<br>
+          Available to transfer: <strong>${available}</strong> units.
+        </div>
+        <input type="hidden" id="trProdId" value="${productId}">
+        <input type="hidden" id="trDirection" value="${direction}">
+        <div class="form-row"><label class="form-label">Quantity to Transfer</label><input class="form-input" type="number" id="trQty" min="1" max="${available}" value="${available>0?1:0}"></div>
+        <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="confirmTransfer()">✓ Transfer Stock</button>
       </div>
     </div>
   </div>`;
 }
 
-function saveProduct(id){
-  const d={name:v("mName"),cat:v("mCat").trim()||"Uncategorised",supplier:v("mSup").trim()||"—",cost:+v("mCost"),price:+v("mPrice"),stock:+v("mStock")};
-  if(id) products=products.map(p=>p.id===id?{...p,...d}:p);
-  else   products=[...products,{...d,id:Date.now()}];
-  if(d.supplier!=="—" && !suppliers.find(s=>s.name.toLowerCase()===d.supplier.toLowerCase())){
-    suppliers=[...suppliers,{id:Date.now()+1,name:d.supplier,contact:"",phone:"",email:""}];
+async function confirmTransfer(){
+  const productId=+v("trProdId"), direction=v("trDirection"), qty=+v("trQty");
+  const p=products.find(x=>x.id===productId);
+  const available = direction==="to_warehouse" ? p.stock : p.warehouseStock;
+  if(!qty || qty<=0){ toast("Enter a quantity greater than 0","error"); return; }
+  if(qty>available){ toast(`Only ${available} units available to transfer`,"error"); return; }
+
+  const newMain = direction==="to_warehouse" ? p.stock-qty : p.stock+qty;
+  const newWarehouse = direction==="to_warehouse" ? p.warehouseStock+qty : p.warehouseStock-qty;
+
+  try{
+    const {error}=await sb.from("products").update({stock:newMain, warehouse_stock:newWarehouse}).eq("id",productId);
+    if(error) throw error;
+    await sb.from("stock_transfers").insert({product_id:productId,product_name:p.name,quantity:qty,direction,transferred_by:currentUser.name});
+    await reloadTable("products");
+    toast(`${qty} × ${p.name} transferred`,"success");
+    closeModal(); renderPage();
+  }catch(err){
+    toast("Transfer failed: "+err.message,"error");
   }
-  closeModal(); renderPage();
 }
 
 // ══════════════════════════════════════════
@@ -654,7 +935,13 @@ function pageSales(){
   </div>`;
 }
 
-function delSale(id){ if(confirm("Delete this sale record? Its linked receipt will remain in Receipts unless deleted separately.")){ sales=sales.filter(s=>s.id!==id); toast("Sale record deleted","success"); renderPage(); } }
+async function delSale(id){
+  if(!confirm("Delete this sale record? Its linked receipt will remain in Receipts unless deleted separately.")) return;
+  const {error}=await sb.from("sales").delete().eq("id",id);
+  if(error){ toast("Delete failed: "+error.message,"error"); return; }
+  await reloadTable("sales");
+  toast("Sale record deleted","success"); renderPage();
+}
 
 let saleCart = [];
 
@@ -686,24 +973,26 @@ function openSaleModal(){
         </div>
         <div class="form-row"><label class="form-label">Phone Number</label><input class="form-input" id="sCustPhone" placeholder="e.g. 071 234 5678"></div>
 
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#9a5b1a;cursor:pointer;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;padding:12px 14px;margin:14px 0 0">
+          <input type="checkbox" id="sIsLayby" onchange="toggleLaybyMode()" style="width:16px;height:16px">
+          This is a Lay-by Sale
+        </label>
+
         <div style="font-size:11px;font-weight:700;color:#dc0a2d;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px;border-top:1px solid #f3f4f6;padding-top:14px">Add Items to This Sale</div>
         <div class="form-row"><label class="form-label">Product</label>
-          <input class="form-input" id="sProd" list="prodList" placeholder="Type or pick a product…" oninput="calcSaleLine()">
+          <input class="form-input" id="sProd" list="prodList" placeholder="Type or pick a product…" oninput="calcSaleLine()" onchange="fillCatalogPrice()">
           <datalist id="prodList">${products.map(p=>`<option value="${p.name}">`).join("")}</datalist>
         </div>
-        <div id="sNewPriceRow" class="grid-2" style="display:none">
-          <div class="form-row"><label class="form-label" style="color:#dc0a2d">⚠ New Product — Selling Price (R)</label>
-            <input class="form-input" type="number" id="sNewPrice" placeholder="Required to continue" oninput="calcSaleLine()" style="border-color:#dc0a2d"></div>
-          <div class="form-row"><label class="form-label">Stock On Hand (how many arrived)</label>
-            <input class="form-input" type="number" id="sNewStock" placeholder="Defaults to qty being sold" min="0"></div>
-        </div>
+        <div id="sNewBadge" style="display:none;font-size:11px;color:#dc0a2d;font-weight:700;margin:-4px 0 8px">⚠ New product — set its selling price below, and how much stock arrived.</div>
         <div class="grid-2">
           <div class="form-row"><label class="form-label">Quantity</label><input class="form-input" type="number" id="sQty" value="1" min="1" oninput="calcSaleLine()"></div>
-          <div class="form-row"><label class="form-label">Line Total</label>
-            <div class="form-input" style="background:#f9fafb;display:flex;align-items:center;font-weight:700;color:#dc0a2d" id="sLineTotal">R 0.00</div>
-          </div>
+          <div class="form-row"><label class="form-label">Price Each (R) <span style="font-weight:400;color:#9ca3af">— editable</span></label><input class="form-input" type="number" id="sPrice" oninput="calcSaleLine()" placeholder="Catalog price fills in"></div>
         </div>
-        <div id="sLineErr" style="display:none;color:#dc0a2d;font-size:12px;font-weight:600;margin-bottom:8px">⚠ Please enter a selling price for this new product first.</div>
+        <div id="sStockRow" class="form-row" style="display:none"><label class="form-label">Stock On Hand (how many arrived)</label><input class="form-input" type="number" id="sNewStock" placeholder="Defaults to qty being sold" min="0"></div>
+        <div class="form-row"><label class="form-label">Line Total</label>
+          <div class="form-input" style="background:#f9fafb;display:flex;align-items:center;font-weight:700;color:#dc0a2d" id="sLineTotal">R 0.00</div>
+        </div>
+        <div id="sLineErr" style="display:none;color:#dc0a2d;font-size:12px;font-weight:600;margin-bottom:8px">⚠ Please enter a price for this item first.</div>
         <button class="btn-black" style="width:100%;justify-content:center;margin-bottom:16px" onclick="addSaleItem()">＋ Add Item to Sale</button>
 
         <div id="sCartBox" style="background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;padding:4px;margin-bottom:14px">
@@ -714,6 +1003,10 @@ function openSaleModal(){
           <div class="form-row"><label class="form-label">Payment Method</label>
             <select class="form-input" id="sMethod"><option>Cash</option><option>Card</option><option>EFT</option></select></div>
         </div>
+        <div id="sLaybyDepositRow" class="form-row" style="display:none">
+          <label class="form-label">Deposit / Payment Received Now (R)</label>
+          <input class="form-input" type="number" id="sDeposit" placeholder="Can be less than the total">
+        </div>
         <div class="total-box">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <span style="font-size:13px;color:#374151;font-weight:600">Sale Grand Total</span>
@@ -721,9 +1014,9 @@ function openSaleModal(){
           </div>
         </div>
         <div id="sErr" style="display:none;color:#dc0a2d;font-size:12px;font-weight:600;margin-bottom:10px">⚠ Please add at least one item to the sale before saving.</div>
-        <div style="font-size:11px;color:#6b7280;margin-bottom:10px">✓ Saving will deduct stock for every item (adding any brand-new item to Inventory first), save the customer's details, and generate one receipt for the whole sale.</div>
+        <div id="sSaveNote" style="font-size:11px;color:#6b7280;margin-bottom:10px">✓ Saving will deduct stock for every item (adding any brand-new item to Inventory first), save the customer's details, and generate one receipt for the whole sale.</div>
         <div style="display:flex;gap:10px">
-          <button class="btn-red" style="flex:1;justify-content:center" onclick="saveSale()">✓ Save Sale</button>
+          <button class="btn-red" id="sSaveBtn" style="flex:1;justify-content:center" onclick="submitSale()">✓ Save Sale</button>
           <button class="btn-outline" onclick="closeModal()">Cancel</button>
         </div>
       </div>
@@ -732,43 +1025,50 @@ function openSaleModal(){
   calcSaleLine(); renderSaleCart();
 }
 
+function toggleLaybyMode(){
+  const isLayby=$("sIsLayby").checked;
+  $("sLaybyDepositRow").style.display = isLayby ? "block":"none";
+  $("sSaveBtn").textContent = isLayby ? "✓ Save Lay-by" : "✓ Save Sale";
+  $("sSaveNote").textContent = isLayby
+    ? "✓ Saving will record the deposit and print a payment receipt, but stock stays available — nothing is deducted until the lay-by is fully paid off."
+    : "✓ Saving will deduct stock for every item (adding any brand-new item to Inventory first), save the customer's details, and generate one receipt for the whole sale.";
+}
+
+function fillCatalogPrice(){
+  const p=products.find(x=>x.name.toLowerCase()===v("sProd").trim().toLowerCase());
+  if(p) $("sPrice").value=p.totalSellingPrice;
+  calcSaleLine();
+}
+
 function calcSaleLine(){
   const pName=v("sProd");
   const p=products.find(x=>x.name.toLowerCase()===pName.toLowerCase());
   const isNew = pName.trim()!=="" && !p;
-  if($("sNewPriceRow")) $("sNewPriceRow").style.display = isNew ? "grid" : "none";
-  const price = p ? p.price : (+v("sNewPrice")||0);
+  if($("sNewBadge")) $("sNewBadge").style.display = isNew ? "block" : "none";
+  if($("sStockRow")) $("sStockRow").style.display = isNew ? "block" : "none";
+  const price = +v("sPrice")||0;
   if($("sLineTotal")) $("sLineTotal").textContent=fmt(price*(+v("sQty")||1));
 }
 
 function addSaleItem(){
-  const pName=v("sProd").trim(); const qty=+v("sQty")||1;
+  const pName=v("sProd").trim(); const qty=+v("sQty")||1; const price=+v("sPrice")||0;
   if(!pName){ toast("Please enter a product first","error"); return; }
-  let p=products.find(x=>x.name.toLowerCase()===pName.toLowerCase());
-  let isNewProduct=false; let newPrice=0; let newStock=null;
-  if(!p){
-    newPrice=+v("sNewPrice");
-    if(!newPrice || newPrice<=0){
-      $("sLineErr").style.display="block";
-      $("sNewPrice").focus();
-      return;
-    }
-    const stockInput=v("sNewStock");
-    newStock = stockInput!=="" ? Math.max(0,+stockInput) : qty; // if left blank, assume this is the only stock that arrived
-    isNewProduct=true;
-  }
+  if(!price || price<=0){ $("sLineErr").style.display="block"; $("sPrice").focus(); return; }
   $("sLineErr").style.display="none";
+  const p=products.find(x=>x.name.toLowerCase()===pName.toLowerCase());
+  const isNewProduct=!p;
+  const catalogPrice = p ? p.totalSellingPrice : price;
+  const newStock = isNewProduct ? (v("sNewStock")!==""?Math.max(0,+v("sNewStock")):qty) : null;
   saleCart.push({
     product: p ? p.name : pName,
-    qty, price: p ? p.price : newPrice,
+    qty, price,
+    originalPrice: (catalogPrice!==price) ? catalogPrice : null,
     isNew: isNewProduct,
     initialStock: newStock
   });
   // reset the line inputs for the next item
-  $("sProd").value=""; $("sQty").value="1";
-  if($("sNewPrice")) $("sNewPrice").value="";
+  $("sProd").value=""; $("sQty").value="1"; $("sPrice").value="";
   if($("sNewStock")) $("sNewStock").value="";
-  $("sNewPriceRow").style.display="none";
   calcSaleLine();
   renderSaleCart();
 }
@@ -786,8 +1086,8 @@ function renderSaleCart(){
     box.innerHTML = saleCart.map((it,i)=>`
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 6px;border-bottom:1px solid #e5e7eb;font-size:13px">
         <div>
-          <strong>${it.product}</strong> ${it.isNew?'<span class="badge red" style="margin-left:4px">New</span>':''}
-          <div style="color:#6b7280;font-size:11px">${it.qty} × ${fmt(it.price)}</div>
+          <strong>${it.product}</strong> ${it.isNew?'<span class="badge red" style="margin-left:4px">New</span>':''}${it.originalPrice?'<span class="badge yellow" style="margin-left:4px">Price Adjusted</span>':''}
+          <div style="color:#6b7280;font-size:11px">${it.qty} × ${it.originalPrice?`<s style="opacity:.6">${fmt(it.originalPrice)}</s> `:''}${fmt(it.price)}</div>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
           <strong style="color:#111">${fmt(it.qty*it.price)}</strong>
@@ -799,11 +1099,135 @@ function renderSaleCart(){
   if($("sTotal")) $("sTotal").textContent=fmt(grandTotal);
 }
 
-function saveSale(){
+async function submitSale(){
+  if($("sIsLayby").checked) await saveLaybySale();
+  else await saveSale();
+}
+
+async function saveLaybySale(){
+  if(saleCart.length===0){ $("sErr").style.display="block"; return; }
+  const deposit=+v("sDeposit")||0;
+  const grandTotal=saleCart.reduce((a,it)=>a+it.qty*it.price,0);
+  if(deposit<=0){ toast("Please enter the deposit amount received","error"); return; }
+  if(deposit>grandTotal){ toast("The deposit can't be more than the total","error"); return; }
+
+  const custName=v("sCust").trim()||"Walk-in";
+  const custSurname=v("sSurname").trim();
+  const custPhone=v("sCustPhone").trim();
+  const method=v("sMethod");
+  const saveBtn=$("sSaveBtn");
+  if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent="Saving…"; }
+
+  try{
+    // Brand-new products still get added to Inventory now (so it's ready to sell) — stock is only deducted once the lay-by completes.
+    for(const it of saleCart){
+      if(it.isNew){
+        const sellingPrice=it.price/(1+settings.vatRate/100);
+        const vatAmount=it.price-sellingPrice;
+        const {error}=await sb.from("products").insert({
+          name:it.product, category:"Uncategorised", supplier:"—", cost:0,
+          trade_price:sellingPrice, markup:0, selling_price:sellingPrice, vat_amount:vatAmount,
+          total_selling_price:it.price, price:it.price,
+          stock:(it.initialStock!=null?it.initialStock:it.qty), warehouse_stock:0
+        });
+        if(error) throw error;
+      }
+    }
+    await reloadTable("products");
+
+    const existingCust=customers.find(c=>c.name.toLowerCase()===custName.toLowerCase());
+    if(existingCust){
+      await sb.from("customers").update({surname:custSurname||existingCust.surname,phone:custPhone||existingCust.phone}).eq("id",existingCust.id);
+    } else if(custName!=="Walk-in"){
+      await sb.from("customers").insert({name:custName,surname:custSurname,phone:custPhone,address:"",email:""});
+    }
+    await reloadTable("customers");
+
+    const laybyNum=await nextRef("ZDH-LB-",laybys,"num");
+    const items=saleCart.map(it=>({product:it.product,qty:it.qty,price:it.price,originalPrice:it.originalPrice||null}));
+    const {data:newLayby,error:lErr}=await sb.from("laybys").insert({
+      layby_num:laybyNum, customer:custName, surname:custSurname, phone:custPhone,
+      items, original_total:grandTotal, total_paid:0, outstanding_balance:grandTotal, status:"Pending"
+    }).select().single();
+    if(lErr) throw lErr;
+
+    await recordLaybyPayment(newLayby.id, deposit, method, true);
+
+    saleCart=[];
+    toast("Lay-by saved — deposit receipted, stock held until it's fully paid","success");
+    closeModal(); renderPage();
+  }catch(err){
+    toast("Something went wrong saving this lay-by: "+err.message,"error");
+  }finally{
+    if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent="✓ Save Lay-by"; }
+  }
+}
+
+async function recordLaybyPayment(laybyId, amount, method, isDeposit){
+  const {data:lbRow,error:fetchErr}=await sb.from("laybys").select("*").eq("id",laybyId).single();
+  if(fetchErr) throw fetchErr;
+  const newPaid=Math.round((+lbRow.total_paid+amount)*100)/100;
+  const newOutstanding=Math.max(0, Math.round((+lbRow.original_total-newPaid)*100)/100);
+
+  const receiptNum=await nextRef("ZDH-",receipts,"num");
+  const snap=customerSnapshot(lbRow.customer);
+  const vb=vatBreakdown(amount);
+  const {error:rErr}=await sb.from("receipts").insert({
+    num:receiptNum, receipt_date:today(), customer:lbRow.customer, surname:snap.surname, phone:lbRow.phone,
+    email:snap.email, address:snap.address, customer_vat_number:snap.vatNumber,
+    items:[{product:`${isDeposit?"Lay-by Deposit":"Lay-by Payment"} — ${lbRow.layby_num}`, qty:1, price:amount}],
+    total:amount, subtotal:vb.subtotal, vat_amount:vb.vatAmount, method, status: isDeposit ? "Lay-by Deposit" : "Lay-by Payment"
+  });
+  if(rErr) throw rErr;
+
+  const {error:pErr}=await sb.from("layby_payments").insert({layby_id:laybyId, amount, method, receipt_num:receiptNum});
+  if(pErr) throw pErr;
+
+  await sb.from("laybys").update({total_paid:newPaid, outstanding_balance:newOutstanding}).eq("id",laybyId);
+  await reloadTable("receipts");
+  await reloadTable("laybys");
+
+  if(newOutstanding<=0){
+    await completeLayby(laybyId);
+  }
+}
+
+async function completeLayby(laybyId){
+  await reloadTable("laybys");
+  const lb=laybys.find(l=>l.id===laybyId);
+  if(!lb) return;
+
+  for(const it of lb.items){
+    const p=products.find(x=>x.name.toLowerCase()===it.product.toLowerCase());
+    if(p) await sb.from("products").update({stock:Math.max(0,p.stock-it.qty)}).eq("id",p.id);
+  }
+  await reloadTable("products");
+
+  const receiptNum=await nextRef("ZDH-",receipts,"num");
+  const snap=customerSnapshot(lb.customer);
+  const vb=vatBreakdown(lb.originalTotal);
+  await sb.from("receipts").insert({
+    num:receiptNum, receipt_date:today(), customer:lb.customer, surname:snap.surname||lb.surname, phone:lb.phone,
+    email:snap.email, address:snap.address, customer_vat_number:snap.vatNumber,
+    items:lb.items, total:lb.originalTotal, subtotal:vb.subtotal, vat_amount:vb.vatAmount, method:"Lay-by", status:"Completed Lay-by"
+  });
+  await reloadTable("receipts");
+
+  await sb.from("laybys").update({status:"Completed", completed_at:new Date().toISOString()}).eq("id",laybyId);
+  await reloadTable("laybys");
+
+  toast(`${lb.num} fully paid — marked complete and stock deducted`,"success");
+  renderPage();
+}
+
+async function saveSale(){
   if(saleCart.length===0){
     $("sErr").style.display="block";
     return;
   }
+  const saveBtn=$("sSaveBtn");
+  if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent="Saving…"; }
+
   const method=v("sMethod");
   const custName=v("sCust").trim()||"Walk-in";
   const custSurname=v("sSurname").trim();
@@ -811,37 +1235,158 @@ function saveSale(){
   const saleDate=v("sDate");
   const grandTotal=saleCart.reduce((a,it)=>a+it.qty*it.price,0);
 
-  // 1) Add any brand-new products to Inventory with the stock that actually arrived, then deduct stock for every item
-  saleCart.forEach(it=>{
-    let p=products.find(x=>x.name.toLowerCase()===it.product.toLowerCase());
-    if(!p){
-      p={id:Date.now()+Math.random(),name:it.product,cat:"Uncategorised",supplier:"—",cost:0,price:it.price,stock:(it.initialStock!=null?it.initialStock:it.qty)};
-      products=[...products,p];
+  try{
+    // 1) Add any brand-new products to Inventory with the stock that actually arrived, then deduct stock for every item
+    for(const it of saleCart){
+      let p=products.find(x=>x.name.toLowerCase()===it.product.toLowerCase());
+      if(!p){
+        // Treat the price typed in during the sale as the Total Selling Price (incl. VAT),
+        // and back-calculate the pricing engine fields so Inventory stays consistent.
+        const totalSellingPrice=it.price;
+        const sellingPrice=totalSellingPrice/(1+settings.vatRate/100);
+        const vatAmount=totalSellingPrice-sellingPrice;
+        const {data,error}=await sb.from("products").insert({
+          name:it.product, category:"Uncategorised", supplier:"—", cost:0,
+          trade_price:sellingPrice, markup:0, selling_price:sellingPrice, vat_amount:vatAmount,
+          total_selling_price:totalSellingPrice, price:totalSellingPrice,
+          stock:(it.initialStock!=null?it.initialStock:it.qty), warehouse_stock:0
+        }).select().single();
+        if(error) throw error;
+        p=mapProduct(data);
+      }
+      const {error:updErr}=await sb.from("products").update({stock:Math.max(0,p.stock-it.qty)}).eq("id",p.id);
+      if(updErr) throw updErr;
     }
-    products=products.map(pr=>pr.id===p.id?{...pr,stock:Math.max(0,pr.stock-it.qty)}:pr);
-  });
 
-  // 2) Save / update Customer record (name, surname, phone all carried through)
-  const existingCust=customers.find(c=>c.name.toLowerCase()===custName.toLowerCase());
-  if(existingCust){
-    customers=customers.map(c=>c.id===existingCust.id?{...c,surname:custSurname||c.surname,phone:custPhone||c.phone}:c);
-  } else if(custName!=="Walk-in"){
-    customers=[...customers,{id:Date.now()+1,name:custName,surname:custSurname,phone:custPhone,address:"",email:""}];
+    // 2) Save / update Customer record (name, surname, phone all carried through)
+    const existingCust=customers.find(c=>c.name.toLowerCase()===custName.toLowerCase());
+    if(existingCust){
+      await sb.from("customers").update({surname:custSurname||existingCust.surname,phone:custPhone||existingCust.phone}).eq("id",existingCust.id);
+    } else if(custName!=="Walk-in"){
+      await sb.from("customers").insert({name:custName,surname:custSurname,phone:custPhone,address:"",email:""});
+    }
+    await reloadTable("customers");
+
+    // 3) Auto-generate one Receipt covering every item
+    const receiptNum=await nextRef("ZDH-",receipts,"num");
+    const items = saleCart.map(it=>({product:it.product,qty:it.qty,price:it.price}));
+    const snap=customerSnapshot(custName);
+    const vb=vatBreakdown(grandTotal);
+    const {error:rErr}=await sb.from("receipts").insert({
+      num:receiptNum, receipt_date:saleDate, customer:custName, surname:custSurname||snap.surname, phone:custPhone,
+      email:snap.email, address:snap.address, customer_vat_number:snap.vatNumber,
+      items, total:grandTotal, subtotal:vb.subtotal, vat_amount:vb.vatAmount, method, status:"Paid in Full"
+    });
+    if(rErr) throw rErr;
+
+    // 4) Save the Sale, linked to its receipt, with every item
+    const {error:sErr}=await sb.from("sales").insert({
+      sale_date:saleDate, customer:custName, items, total:grandTotal, method, receipt_num:receiptNum
+    });
+    if(sErr) throw sErr;
+
+    await Promise.all([reloadTable("products"),reloadTable("customers"),reloadTable("receipts"),reloadTable("sales")]);
+    saleCart=[];
+    toast("Sale saved — stock, customer and receipt all updated","success");
+    closeModal(); renderPage();
+  }catch(err){
+    toast("Something went wrong saving this sale: "+err.message,"error");
+  }finally{
+    if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent="✓ Save Sale"; }
   }
-
-  // 3) Auto-generate one Receipt covering every item
-  const receiptNum="ZDH-00"+String(receiptCounter).padStart(3,"0"); receiptCounter++;
-  const items = saleCart.map(it=>({product:it.product,qty:it.qty,price:it.price}));
-  const receipt={id:Date.now()+2,num:receiptNum,date:saleDate,customer:custName,phone:custPhone,
-    items,total:grandTotal,method,status:"Paid in Full"};
-  receipts=[receipt,...receipts];
-
-  // 4) Save the Sale, linked to its receipt, with every item
-  sales=[{id:Date.now(),date:saleDate,customer:custName,items,total:grandTotal,method,receiptNum},...sales];
-
-  saleCart=[];
-  closeModal(); renderPage();
 }
+
+// ══════════════════════════════════════════
+// LAY-BYS
+// ══════════════════════════════════════════
+function pageLaybys(){
+  const q=searchVal.toLowerCase();
+  const filtered=laybys.filter(l=>l.customer.toLowerCase().includes(q)||l.phone.includes(q));
+  const pending=filtered.filter(l=>l.status==="Pending");
+  const completed=filtered.filter(l=>l.status==="Completed").slice(0,10);
+
+  const row = l => `
+      <tr>
+        <td><strong style="color:#dc0a2d">${l.num}</strong></td>
+        <td><strong>${l.customer}</strong>${l.surname?` ${l.surname}`:""}</td>
+        <td>${l.phone||"—"}</td>
+        <td>${l.items.map(i=>`${i.product} ×${i.qty}`).join(", ")}</td>
+        <td><strong>${fmt(l.originalTotal)}</strong></td>
+        <td>${fmt(l.totalPaid)}</td>
+        <td>${l.status==="Pending"?`<strong style="color:#dc0a2d">${fmt(l.outstandingBalance)}</strong>`:`<span class="badge green">Paid in Full</span>`}</td>
+        <td>
+          ${l.status==="Pending"?`<button class="btn-icon" onclick="openLaybyPaymentModal(${l.id})" title="Add Payment">➕</button>`:""}
+        </td>
+      </tr>`;
+
+  return `
+  <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Lay-bys</div>
+  <div style="background:#fff1f2;border:1.5px solid #fecdd3;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#7a0a1f">
+    💡 Tick "This is a Lay-by Sale" in New Sale to start one. Stock is only deducted once the balance reaches zero.
+  </div>
+  <div class="toolbar">
+    <div class="search-box">🔍 <input placeholder="Search by customer name or phone…" oninput="searchVal=this.value;renderPage()" value="${searchVal}"></div>
+    <button class="btn-red" onclick="openSaleModal()">＋ New Sale</button>
+  </div>
+
+  <div class="panel" style="margin-bottom:18px">
+    <div class="panel-head"><span>⏳ Pending (${pending.length})</span></div>
+    <table><thead><tr><th>Lay-by No.</th><th>Customer</th><th>Phone</th><th>Items</th><th>Total</th><th>Paid</th><th>Balance Due</th><th>Actions</th></tr></thead>
+    <tbody>${pending.map(row).join("")}</tbody></table>
+    ${pending.length===0?`<div class="empty-state"><div class="es-icon">⏳</div><div class="es-title">No pending lay-bys</div><div class="es-sub">Start one from New Sale by ticking "This is a Lay-by Sale".</div></div>`:""}
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><span>✅ Recently Completed</span></div>
+    <table><thead><tr><th>Lay-by No.</th><th>Customer</th><th>Phone</th><th>Items</th><th>Total</th><th>Paid</th><th>Balance Due</th><th>Actions</th></tr></thead>
+    <tbody>${completed.map(row).join("")}</tbody></table>
+    ${completed.length===0?`<p style="color:#9ca3af;font-size:12px;text-align:center;padding:16px">No completed lay-bys yet.</p>`:""}
+  </div>`;
+}
+
+function openLaybyPaymentModal(id){
+  const l=laybys.find(x=>x.id===id);
+  $("modal").innerHTML=`
+  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box" style="max-width:420px">
+      <div class="modal-head">
+        <div><div class="modal-title">Add Payment</div><div class="modal-brand">${l.num} — ${l.customer}${l.surname?" "+l.surname:""}</div></div>
+        <button class="close-btn" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="receipt-preview" style="margin-bottom:16px">
+          <div class="r-row"><span>Total</span><span>${fmt(l.originalTotal)}</span></div>
+          <div class="r-row"><span>Paid So Far</span><span>${fmt(l.totalPaid)}</span></div>
+          <div class="r-divider"></div>
+          <div class="r-row" style="font-weight:700"><span>Balance Due</span><span style="color:#dc0a2d">${fmt(l.outstandingBalance)}</span></div>
+        </div>
+        <div class="grid-2">
+          <div class="form-row"><label class="form-label">Payment Amount (R)</label><input class="form-input" type="number" id="lpAmount" value="${l.outstandingBalance}" max="${l.outstandingBalance}"></div>
+          <div class="form-row"><label class="form-label">Payment Method</label>
+            <select class="form-input" id="lpMethod"><option>Cash</option><option>Card</option><option>EFT</option></select></div>
+        </div>
+        <div style="font-size:11px;color:#6b7280;margin-bottom:12px">💡 If this payment reaches the full balance, the lay-by completes automatically — stock deducts and the final receipt generates right away.</div>
+        <button class="btn-red" style="width:100%;justify-content:center" onclick="submitLaybyPayment(${id})">✓ Record Payment</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function submitLaybyPayment(id){
+  const l=laybys.find(x=>x.id===id);
+  const amount=+v("lpAmount")||0;
+  const method=v("lpMethod");
+  if(amount<=0){ toast("Enter a payment amount greater than 0","error"); return; }
+  if(amount>l.outstandingBalance+0.01){ toast(`That's more than the ${fmt(l.outstandingBalance)} still owing`,"error"); return; }
+  try{
+    await recordLaybyPayment(id, amount, method, false);
+    toast("Payment recorded","success");
+    closeModal(); renderPage();
+  }catch(err){
+    toast("Couldn't record payment: "+err.message,"error");
+  }
+}
+
 
 // ══════════════════════════════════════════
 // RECEIPTS
@@ -863,12 +1408,13 @@ function pageReceipts(){
         <td>${r.customer}</td><td>${r.date}</td>
         <td><span class="chip">${r.method}</span></td>
         <td><strong>${fmt(r.total)}</strong></td>
-        <td><span class="badge green">${r.status}</span></td>
+        <td><span class="badge ${(r.status==="Paid in Full"||r.status==="Completed Lay-by")?"green":"yellow"}">${r.status}</span></td>
         <td>
           <button class="btn-icon" onclick="viewReceipt(${r.id})" title="View">👁️</button>
+          <button class="btn-icon" onclick="downloadReceiptPDF(${r.id})" title="Download PDF">📄</button>
           <button class="btn-icon" onclick="printReceipt(${r.id})" title="Print">🖨️</button>
           <button class="btn-icon" onclick="editReceiptDetails(${r.id})" title="Edit Customer Details">✏️</button>
-          <button class="btn-icon" onclick="createDelFromReceipt(${r.id})" title="Create Delivery">🚚</button>
+          ${(r.status==="Paid in Full"||r.status==="Completed Lay-by")?`<button class="btn-icon" onclick="createDelFromReceipt(${r.id})" title="Create Delivery">🚚</button>`:""}
           <button class="btn-icon" onclick="delReceipt(${r.id})" title="Delete">🗑️</button>
         </td>
       </tr>`).join("")}
@@ -881,33 +1427,46 @@ function createDelFromReceipt(id){
   const r=receipts.find(x=>x.id===id);
   const c=customers.find(x=>x.name.toLowerCase()===r.customer.toLowerCase());
   openDelModal(null,{
-    customer:r.customer, surname:c?c.surname:"", phone:r.phone||(c?c.phone:""),
-    address:c?c.address:"", date:today(), driver:"", status:"Pending",
+    customer:r.customer, surname:c?c.surname:(r.surname||""), phone:r.phone||(c?c.phone:""),
+    address:c?c.address:(r.address||""), date:today(), driver:"", status:"Pending",
     items:r.items.map(i=>({product:i.product,qty:i.qty})), receiptNum:r.num
   });
 }
 
-function delReceipt(id){ if(confirm("Delete this receipt? This cannot be undone.")){ receipts=receipts.filter(r=>r.id!==id); toast("Receipt deleted","success"); renderPage(); } }
+async function delReceipt(id){
+  if(!confirm("Delete this receipt? This cannot be undone.")) return;
+  const {error}=await sb.from("receipts").delete().eq("id",id);
+  if(error){ toast("Delete failed: "+error.message,"error"); return; }
+  await reloadTable("receipts");
+  toast("Receipt deleted","success"); renderPage();
+}
 
 function receiptHTML(r,forPrint){
+  const custLine=[r.customer,r.surname].filter(Boolean).join(" ");
   return `
   <div class="receipt-preview" id="rPreview">
     <h3>${settings.name}</h3>
     <div class="r-sub">${settings.address}</div>
     <div class="r-sub">${settings.phone} | ${settings.email}</div>
+    ${settings.vatNumber?`<div class="r-sub">VAT No: ${settings.vatNumber}</div>`:""}
     <div class="r-divider"></div>
-    <div class="r-row"><span><strong>RECEIPT</strong></span><span>${r.num}</span></div>
+    <div class="r-row"><span><strong>${r.status||"RECEIPT"}</strong></span><span>${r.num}</span></div>
     <div class="r-row"><span>Date:</span><span>${r.date}</span></div>
-    <div class="r-row"><span>Customer:</span><span>${r.customer}</span></div>
+    <div class="r-divider"></div>
+    <div class="r-row"><span>Customer:</span><span>${custLine}</span></div>
     ${r.phone?`<div class="r-row"><span>Phone:</span><span>${r.phone}</span></div>`:""}
+    ${r.email?`<div class="r-row"><span>Email:</span><span>${r.email}</span></div>`:""}
+    ${r.address?`<div class="r-row"><span>Address:</span><span>${r.address}</span></div>`:""}
+    ${r.customerVatNumber?`<div class="r-row"><span>Customer VAT No:</span><span>${r.customerVatNumber}</span></div>`:""}
     <div class="r-divider"></div>
     <div class="r-row" style="font-weight:700;font-size:11px;color:#6b7280"><span>PRODUCT</span><span>QTY &nbsp; PRICE &nbsp; TOTAL</span></div>
     <div class="r-divider"></div>
     ${r.items.map(i=>`<div class="r-row"><span>${i.product}</span><span>${i.qty} × ${fmt(i.price)} = ${fmt(i.qty*i.price)}</span></div>`).join("")}
     <div class="r-divider"></div>
+    <div class="r-row"><span>Subtotal (excl. VAT):</span><span>${fmt(r.subtotal)}</span></div>
+    <div class="r-row"><span>VAT (${settings.vatRate}%):</span><span>${fmt(r.vatAmount)}</span></div>
     <div class="r-total"><span>TOTAL</span><span>${fmt(r.total)}</span></div>
     <div class="r-row"><span>Payment Method:</span><span>${r.method}</span></div>
-    <div class="r-row"><span>Status:</span><span><strong style="color:#0e9f6e">${r.status}</strong></span></div>
     <div class="r-divider"></div>
     <div style="text-align:center;font-size:11px;color:#6b7280;margin-top:6px">Thank you for shopping at ${settings.name}!</div>
   </div>`;
@@ -925,12 +1484,156 @@ function viewReceipt(id){
       <div class="modal-body">
         ${receiptHTML(r,false)}
         <div style="display:flex;gap:10px;margin-top:12px">
-          <button class="btn-red" style="flex:1;justify-content:center" onclick="printReceipt(${id})">🖨️ Print Receipt</button>
-          <button class="btn-outline" onclick="closeModal()">Close</button>
+          <button class="btn-red" style="flex:1;justify-content:center" onclick="downloadReceiptPDF(${id})">📄 Download PDF</button>
+          <button class="btn-black" style="flex:1;justify-content:center" onclick="printReceipt(${id})">🖨️ Print</button>
         </div>
+        <div style="display:flex;gap:10px;margin-top:10px">
+          <button class="btn-outline" style="flex:1;justify-content:center" onclick="emailReceipt(${id})">📧 Email Receipt</button>
+          <button class="btn-outline" style="flex:1;justify-content:center" onclick="whatsappReceipt(${id})">💬 WhatsApp Receipt</button>
+        </div>
+        <button class="btn-outline" style="width:100%;justify-content:center;margin-top:10px" onclick="closeModal()">Close</button>
       </div>
     </div>
   </div>`;
+}
+
+function buildReceiptPDF(r){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:"mm", format:"a5"});
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 12;
+  let y = 16;
+
+  doc.setFont("helvetica","bold"); doc.setFontSize(15);
+  doc.text(settings.name, pageW/2, y, {align:"center"}); y+=6;
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(90);
+  doc.text(settings.address||"", pageW/2, y, {align:"center"}); y+=4.5;
+  doc.text(`${settings.phone||""}  ${settings.email?"| "+settings.email:""}`, pageW/2, y, {align:"center"}); y+=4.5;
+  if(settings.vatNumber) { doc.text(`VAT No: ${settings.vatNumber}`, pageW/2, y, {align:"center"}); y+=4.5; }
+
+  doc.setDrawColor(220,10,45); doc.setLineWidth(0.6); doc.line(margin,y,pageW-margin,y); y+=7;
+
+  doc.setTextColor(20); doc.setFont("helvetica","bold"); doc.setFontSize(12);
+  doc.text(r.status||"RECEIPT", margin, y);
+  doc.setFont("helvetica","normal"); doc.setFontSize(9);
+  doc.text(r.num, pageW-margin, y, {align:"right"}); y+=5;
+  doc.setTextColor(110);
+  doc.text(`Date: ${r.date}`, margin, y); y+=7;
+
+  doc.setDrawColor(230); doc.setLineWidth(0.2); doc.line(margin,y,pageW-margin,y); y+=6;
+
+  doc.setTextColor(20); doc.setFont("helvetica","bold"); doc.setFontSize(9.5);
+  doc.text("Billed To", margin, y); y+=5;
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(60);
+  const custLine = [r.customer, r.surname].filter(Boolean).join(" ");
+  doc.text(custLine||"Walk-in", margin, y); y+=4.5;
+  if(r.phone)  { doc.text(`Tel: ${r.phone}`, margin, y); y+=4.5; }
+  if(r.email)  { doc.text(`Email: ${r.email}`, margin, y); y+=4.5; }
+  if(r.address){ doc.text(`Address: ${r.address}`, margin, y); y+=4.5; }
+  if(r.customerVatNumber){ doc.text(`VAT No: ${r.customerVatNumber}`, margin, y); y+=4.5; }
+  y+=3;
+
+  doc.setDrawColor(230); doc.line(margin,y,pageW-margin,y); y+=6;
+
+  // Items table header
+  doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(20);
+  doc.text("Item", margin, y);
+  doc.text("Qty", pageW-58, y, {align:"right"});
+  doc.text("Price", pageW-32, y, {align:"right"});
+  doc.text("Total", pageW-margin, y, {align:"right"});
+  y+=2; doc.setDrawColor(20); doc.line(margin,y,pageW-margin,y); y+=5;
+
+  doc.setFont("helvetica","normal"); doc.setTextColor(50);
+  r.items.forEach(it=>{
+    const lines = doc.splitTextToSize(it.product, pageW-margin-58-margin);
+    doc.text(lines, margin, y);
+    doc.text(String(it.qty), pageW-58, y, {align:"right"});
+    doc.text(fmt(it.price), pageW-32, y, {align:"right"});
+    doc.text(fmt(it.qty*it.price), pageW-margin, y, {align:"right"});
+    y += 4.5*lines.length + 1;
+  });
+
+  y+=2; doc.setDrawColor(230); doc.line(margin,y,pageW-margin,y); y+=6;
+
+  const totalsX = pageW-margin;
+  doc.setFontSize(9); doc.setTextColor(80);
+  doc.text("Subtotal (excl. VAT)", pageW-60, y, {align:"left"});
+  doc.text(fmt(r.subtotal), totalsX, y, {align:"right"}); y+=5;
+  doc.text(`VAT (${settings.vatRate}%)`, pageW-60, y, {align:"left"});
+  doc.text(fmt(r.vatAmount), totalsX, y, {align:"right"}); y+=5;
+  doc.setDrawColor(20); doc.line(pageW-60,y,pageW-margin,y); y+=5;
+  doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(20);
+  doc.text("Total", pageW-60, y, {align:"left"});
+  doc.text(fmt(r.total), totalsX, y, {align:"right"}); y+=8;
+
+  doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(120);
+  doc.text(`Payment Method: ${r.method}`, margin, y); y+=8;
+
+  doc.setDrawColor(230); doc.line(margin,y,pageW-margin,y); y+=6;
+  doc.setFontSize(9); doc.setTextColor(150);
+  doc.text(`Thank you for shopping at ${settings.name}!`, pageW/2, y, {align:"center"});
+
+  return doc;
+}
+
+function downloadReceiptPDF(id){
+  const r=receipts.find(x=>x.id===id);
+  if(!r){ toast("That receipt could no longer be found","error"); return; }
+  const doc=buildReceiptPDF(r);
+  doc.save(`Receipt-${r.num}.pdf`);
+}
+
+function receiptPDFBase64(r){
+  const doc=buildReceiptPDF(r);
+  const uri=doc.output("datauristring");
+  return uri.substring(uri.indexOf("base64,")+7);
+}
+
+async function emailReceipt(id){
+  const r=receipts.find(x=>x.id===id);
+  if(!r){ toast("That receipt could no longer be found","error"); return; }
+  if(!r.email){ toast("This customer has no email address saved. Add one under Customers, then try again.","error"); return; }
+  toast("Sending email…");
+  try{
+    const pdfBase64=receiptPDFBase64(r);
+    const {data,error}=await sb.functions.invoke("send-receipt-email",{body:{
+      to:r.email, businessName:settings.name, customerName:[r.customer,r.surname].filter(Boolean).join(" "),
+      receiptNum:r.num, pdfBase64
+    }});
+    if(error) throw error;
+    if(data.configured===false){
+      toast(data.message,"error");
+    } else if(data.success){
+      toast(`Receipt emailed to ${r.email}`,"success");
+    } else {
+      toast(data.error||"Something went wrong sending the email","error");
+    }
+  }catch(err){
+    toast("Couldn't send email: "+err.message,"error");
+  }
+}
+
+async function whatsappReceipt(id){
+  const r=receipts.find(x=>x.id===id);
+  if(!r){ toast("That receipt could no longer be found","error"); return; }
+  if(!r.phone){ toast("This customer has no phone number saved. Add one under Customers, then try again.","error"); return; }
+  toast("Sending WhatsApp message…");
+  try{
+    const {data,error}=await sb.functions.invoke("send-receipt-whatsapp",{body:{
+      to:r.phone, businessName:settings.name, customerName:[r.customer,r.surname].filter(Boolean).join(" "),
+      receiptNum:r.num, total:r.total
+    }});
+    if(error) throw error;
+    if(data.configured===false){
+      toast(data.message,"error");
+    } else if(data.success){
+      toast(`WhatsApp message sent to ${r.phone}`,"success");
+    } else {
+      toast(data.error||"Something went wrong sending the WhatsApp message","error");
+    }
+  }catch(err){
+    toast("Couldn't send WhatsApp message: "+err.message,"error");
+  }
 }
 
 function printReceipt(id){
@@ -945,6 +1648,7 @@ function printReceiptByNum(num){
 }
 
 function printReceiptObj(r){
+  const custLine=[r.customer,r.surname].filter(Boolean).join(" ");
   const w=window.open("","_blank","width=400,height=600");
   w.document.write(`<html><head><title>Receipt ${r.num}</title><style>
     body{font-family:'Segoe UI',sans-serif;padding:20px;max-width:360px;margin:0 auto}
@@ -958,17 +1662,23 @@ function printReceiptObj(r){
     <h3>${settings.name}</h3>
     <div class="sub">${settings.address}</div>
     <div class="sub">${settings.phone} | ${settings.email}</div>
+    ${settings.vatNumber?`<div class="sub">VAT No: ${settings.vatNumber}</div>`:""}
     <div class="divider"></div>
-    <div class="row"><span><strong>RECEIPT</strong></span><span>${r.num}</span></div>
+    <div class="row"><span><strong>${r.status||"RECEIPT"}</strong></span><span>${r.num}</span></div>
     <div class="row"><span>Date:</span><span>${r.date}</span></div>
-    <div class="row"><span>Customer:</span><span>${r.customer}</span></div>
+    <div class="divider"></div>
+    <div class="row"><span>Customer:</span><span>${custLine}</span></div>
     ${r.phone?`<div class="row"><span>Phone:</span><span>${r.phone}</span></div>`:""}
+    ${r.email?`<div class="row"><span>Email:</span><span>${r.email}</span></div>`:""}
+    ${r.address?`<div class="row"><span>Address:</span><span>${r.address}</span></div>`:""}
+    ${r.customerVatNumber?`<div class="row"><span>Customer VAT No:</span><span>${r.customerVatNumber}</span></div>`:""}
     <div class="divider"></div>
     ${r.items.map(i=>`<div class="row"><span>${i.product}</span><span>${i.qty} × R${i.price.toLocaleString()} = R${(i.qty*i.price).toLocaleString()}</span></div>`).join("")}
     <div class="divider"></div>
+    <div class="row"><span>Subtotal (excl. VAT):</span><span>R ${r.subtotal.toLocaleString(undefined,{minimumFractionDigits:2})}</span></div>
+    <div class="row"><span>VAT (${settings.vatRate}%):</span><span>R ${r.vatAmount.toLocaleString(undefined,{minimumFractionDigits:2})}</span></div>
     <div class="total"><span>TOTAL</span><span>R ${r.total.toLocaleString()}</span></div>
     <div class="row"><span>Payment:</span><span>${r.method}</span></div>
-    <div class="row"><span>Status:</span><span><strong>${r.status}</strong></span></div>
     <div class="divider"></div>
     <div class="footer">Thank you for shopping at ${settings.name}!</div>
   </body></html>`);
@@ -1001,9 +1711,12 @@ function editReceiptDetails(id){
   </div>`;
 }
 
-function saveReceiptDetails(id){
+async function saveReceiptDetails(id){
   const newName=v("erCust").trim(); const newPhone=v("erPhone").trim();
-  receipts=receipts.map(r=>r.id===id?{...r,customer:newName||r.customer,phone:newPhone}:r);
+  const {error}=await sb.from("receipts").update({customer:newName||undefined,phone:newPhone}).eq("id",id);
+  if(error){ toast("Couldn't save: "+error.message,"error"); return; }
+  await reloadTable("receipts");
+  toast("Receipt updated","success");
   closeModal(); renderPage();
 }
 
@@ -1022,9 +1735,9 @@ function pageCustomers(){
   <div class="panel">
     <table><thead><tr><th>Name</th><th>Surname</th><th>Phone</th><th>Address</th><th>Email</th><th>Purchases</th><th>Actions</th></tr></thead>
     <tbody>${list.map(c=>{
-      const purchases=sales.filter(s=>s.customer===c.name).length;
+      const purchases=sales.filter(s=>s.customer===c.name).length + laybys.filter(l=>l.customer===c.name && l.status==="Completed").length;
       return `<tr>
-        <td><strong>${c.name}</strong></td>
+        <td><strong>${c.name}</strong>${c.vatNumber?`<br><span class="badge grey" style="margin-top:3px">VAT ${c.vatNumber}</span>`:""}</td>
         <td>${c.surname||"—"}</td>
         <td>${c.phone||"—"}</td>
         <td>${c.address||"—"}</td>
@@ -1040,7 +1753,13 @@ function pageCustomers(){
   </div>`;
 }
 
-function delCust(id){ if(confirm("Delete this customer?")){ customers=customers.filter(c=>c.id!==id); toast("Customer deleted","success"); renderPage(); } }
+async function delCust(id){
+  if(!confirm("Delete this customer?")) return;
+  const {error}=await sb.from("customers").delete().eq("id",id);
+  if(error){ toast("Delete failed: "+error.message,"error"); return; }
+  await reloadTable("customers");
+  toast("Customer deleted","success"); renderPage();
+}
 
 function openCustModal(id){
   const c=id?customers.find(x=>x.id===id):null;
@@ -1058,18 +1777,24 @@ function openCustModal(id){
         </div>
         <div class="form-row"><label class="form-label">Cell Phone Number</label><input class="form-input" id="cPhone" value="${c?c.phone:''}" placeholder="e.g. 071 234 5678"></div>
         <div class="form-row"><label class="form-label">Delivery Address</label><input class="form-input" id="cAddress" value="${c?c.address||'':''}" placeholder="Street, suburb, city"></div>
-        <div class="form-row"><label class="form-label">Email (Optional)</label><input class="form-input" id="cEmail" value="${c?c.email:''}"></div>
+        <div class="grid-2">
+          <div class="form-row"><label class="form-label">Email (Optional)</label><input class="form-input" id="cEmail" value="${c?c.email:''}"></div>
+          <div class="form-row"><label class="form-label">VAT Number (Optional)</label><input class="form-input" id="cVat" value="${c?c.vatNumber||'':''}" placeholder="For business customers"></div>
+        </div>
         <button class="btn-red" style="width:100%;justify-content:center;margin-top:6px" onclick="saveCust(${id||'null'})">✓ Save Customer</button>
       </div>
     </div>
   </div>`;
 }
 
-function saveCust(id){
-  const d={name:v("cName"),surname:v("cSurname"),phone:v("cPhone"),address:v("cAddress"),email:v("cEmail")};
+async function saveCust(id){
+  const d={name:v("cName"),surname:v("cSurname"),phone:v("cPhone"),address:v("cAddress"),email:v("cEmail"),vat_number:v("cVat")};
   if(!d.name.trim()){ toast("Please enter the customer's name","error"); return; }
-  if(id) customers=customers.map(c=>c.id===id?{...c,...d}:c);
-  else   customers=[...customers,{...d,id:Date.now()}];
+  let error;
+  if(id) ({error}=await sb.from("customers").update(d).eq("id",id));
+  else   ({error}=await sb.from("customers").insert(d));
+  if(error){ toast("Couldn't save customer: "+error.message,"error"); return; }
+  await reloadTable("customers");
   toast("Customer saved","success");
   closeModal(); renderPage();
 }
@@ -1104,7 +1829,12 @@ function pageSuppliers(){
   </div>`;
 }
 
-function delSup(id){ if(confirm("Delete this supplier?")){ suppliers=suppliers.filter(s=>s.id!==id); renderPage(); } }
+async function delSup(id){
+  if(!confirm("Delete this supplier?")) return;
+  const {error}=await sb.from("suppliers").delete().eq("id",id);
+  if(error){ toast("Delete failed: "+error.message,"error"); return; }
+  await reloadTable("suppliers"); renderPage();
+}
 
 function openSupModal(id){
   const s=id?suppliers.find(x=>x.id===id):null;
@@ -1128,10 +1858,15 @@ function openSupModal(id){
   </div>`;
 }
 
-function saveSup(id){
+async function saveSup(id){
   const d={name:v("sName"),contact:v("sCont"),phone:v("sPhone"),email:v("sEmail")};
-  if(id) suppliers=suppliers.map(s=>s.id===id?{...s,...d}:s);
-  else   suppliers=[...suppliers,{...d,id:Date.now()}];
+  if(!d.name.trim()){ toast("Please enter a supplier name","error"); return; }
+  let error;
+  if(id) ({error}=await sb.from("suppliers").update(d).eq("id",id));
+  else   ({error}=await sb.from("suppliers").insert(d));
+  if(error){ toast("Couldn't save supplier: "+error.message,"error"); return; }
+  await reloadTable("suppliers");
+  toast("Supplier saved","success");
   closeModal(); renderPage();
 }
 
@@ -1174,7 +1909,13 @@ function pageDeliveries(){
   </div>`;
 }
 
-function delDel(id){ if(confirm("Delete this delivery?")){ deliveries=deliveries.filter(d=>d.id!==id); toast("Delivery deleted","success"); renderPage(); } }
+async function delDel(id){
+  if(!confirm("Delete this delivery?")) return;
+  const {error}=await sb.from("deliveries").delete().eq("id",id);
+  if(error){ toast("Delete failed: "+error.message,"error"); return; }
+  await reloadTable("deliveries");
+  toast("Delivery deleted","success"); renderPage();
+}
 
 let delItemsCart=[];
 
@@ -1293,28 +2034,39 @@ function renderDelItems(){
   }
 }
 
-function saveDel(id){
+async function saveDel(id){
   const custName=v("dCust").trim();
   if(!custName){ toast("Please enter the customer's name","error"); return; }
   if(!v("dAddr").trim()){ toast("Please enter the delivery address","error"); return; }
   const d2={customer:custName,surname:v("dSurname").trim(),phone:v("dPhone").trim(),
-    address:v("dAddr"),date:v("dDate"),driver:v("dDriver"),status:v("dStatus"),items:[...delItemsCart],
-    receiptNum:v("dReceiptNum")||(id?deliveries.find(d=>d.id===id).receiptNum:"")};
-  if(id){
-    deliveries=deliveries.map(d=>d.id===id?{...d,...d2}:d);
-  } else {
-    const note="ZDH-DN-"+String(deliveryCounter).padStart(3,"0"); deliveryCounter++;
-    deliveries=[{...d2,id:Date.now(),note}, ...deliveries];
+    address:v("dAddr"),delivery_date:v("dDate"),driver:v("dDriver"),status:v("dStatus"),items:[...delItemsCart],
+    receipt_num:v("dReceiptNum")||(id?deliveries.find(d=>d.id===id).receiptNum:null)||null};
+
+  try{
+    if(id){
+      const {error}=await sb.from("deliveries").update(d2).eq("id",id);
+      if(error) throw error;
+    } else {
+      const note=await nextRef("ZDH-DN-",deliveries,"note");
+      const {error}=await sb.from("deliveries").insert({...d2,note});
+      if(error) throw error;
+    }
+
+    const existingCust=customers.find(c=>c.name.toLowerCase()===custName.toLowerCase());
+    if(existingCust){
+      await sb.from("customers").update({
+        surname:d2.surname||existingCust.surname, phone:d2.phone||existingCust.phone, address:d2.address||existingCust.address
+      }).eq("id",existingCust.id);
+    } else {
+      await sb.from("customers").insert({name:custName,surname:d2.surname,phone:d2.phone,address:d2.address,email:""});
+    }
+
+    await Promise.all([reloadTable("deliveries"),reloadTable("customers")]);
+    toast("Delivery saved","success");
+    closeModal(); renderPage();
+  }catch(err){
+    toast("Couldn't save delivery: "+err.message,"error");
   }
-  const existingCust=customers.find(c=>c.name.toLowerCase()===custName.toLowerCase());
-  if(existingCust){
-    customers=customers.map(c=>c.id===existingCust.id?{...c,
-      surname:d2.surname||c.surname, phone:d2.phone||c.phone, address:d2.address||c.address}:c);
-  } else {
-    customers=[...customers,{id:Date.now()+1,name:custName,surname:d2.surname,phone:d2.phone,address:d2.address,email:""}];
-  }
-  toast("Delivery saved","success");
-  closeModal(); renderPage();
 }
 
 function deliveryNoteHTML(d){
@@ -1406,30 +2158,66 @@ function printDelNote(id){
 // REPORTS
 // ══════════════════════════════════════════
 function pageReports(){
+  const todayStr=today();
+
+  // ── Today's 3-way split — this is what the owner checks first thing every day ──
+  const completedSalesToday = sales.filter(s=>s.date===todayStr).reduce((a,s)=>a+s.total,0);
+  const laybyDepositsToday = receipts.filter(r=>r.date===todayStr && (r.status==="Lay-by Deposit"||r.status==="Lay-by Payment")).reduce((a,r)=>a+r.total,0);
+  const completedLaybysToday = receipts.filter(r=>r.date===todayStr && r.status==="Completed Lay-by").reduce((a,r)=>a+r.total,0);
+  const totalInToday = completedSalesToday+laybyDepositsToday+completedLaybysToday;
+
+  // ── All-time overview ──
   const totalRev=sales.reduce((a,s)=>a+s.total,0);
-  const totalCost=sales.reduce((a,s)=>{const p=products.find(pr=>pr.name===s.items[0]?.product);return a+(p?p.cost*s.items[0].qty:0);},0);
+  const totalCost=sales.reduce((a,s)=>a+s.items.reduce((x,it)=>{
+    const p=products.find(pr=>pr.name===it.product);
+    return x+(p?p.cost*it.qty:0);
+  },0),0);
   const gross=totalRev-totalCost;
 
-  const days=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-  const dayVals=[3200,5800,2200,4200,3200,2040,3400];
-  const maxV=Math.max(...dayVals);
+  // ── Real last-7-days trend, built from actual completed sales ──
+  const dayLabels=[], dayVals=[];
+  for(let i=6;i>=0;i--){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const key=localDateStr(d);
+    dayLabels.push(d.toLocaleDateString("en-ZA",{weekday:"short"}));
+    dayVals.push(sales.filter(s=>s.date===key).reduce((a,s)=>a+s.total,0));
+  }
+  const maxV=Math.max(1,...dayVals);
 
   const byMethod=["Cash","Card","EFT"].map(m=>({
     m, count:sales.filter(s=>s.method===m).length,
     total:sales.filter(s=>s.method===m).reduce((a,s)=>a+s.total,0)
   }));
 
-  const bestSellers=[...products].sort((a,b)=>{
-    const aSales=sales.filter(s=>s.items[0]?.product===a.name).reduce((x,s)=>x+s.items[0].qty,0);
-    const bSales=sales.filter(s=>s.items[0]?.product===b.name).reduce((x,s)=>x+s.items[0].qty,0);
-    return bSales-aSales;
-  }).slice(0,5);
+  // Tally every item across every sale (previously only counted each sale's first item)
+  const salesTally={};
+  sales.forEach(s=>s.items.forEach(it=>{ salesTally[it.product]=(salesTally[it.product]||0)+it.qty; }));
+  const bestSellers=Object.entries(salesTally).sort((a,b)=>b[1]-a[1]).slice(0,5);
 
   return `
   <div class="panel-brand" style="margin-bottom:10px">Zoe's Dream Haven Reports</div>
+
+  <div class="section-label" style="margin-top:0;border-top:none;padding-top:0">Today — ${new Date().toLocaleDateString("en-ZA",{weekday:"long",day:"numeric",month:"long"})}</div>
+  <div class="card-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="stat-card" style="border-left-color:#dc0a2d">
+      <div class="stat-icon">🛒</div>
+      <div><div class="stat-value" style="color:#dc0a2d">${fmt(completedSalesToday)}</div><div class="stat-label">Completed Sales</div></div>
+    </div>
+    <div class="stat-card" style="border-left-color:#f0b429">
+      <div class="stat-icon">⏳</div>
+      <div><div class="stat-value" style="color:#9a5b1a">${fmt(laybyDepositsToday)}</div><div class="stat-label">Lay-by Deposits Received</div></div>
+    </div>
+    <div class="stat-card" style="border-left-color:#0e9f6e">
+      <div class="stat-icon">✅</div>
+      <div><div class="stat-value" style="color:#0e9f6e">${fmt(completedLaybysToday)}</div><div class="stat-label">Completed Lay-bys</div></div>
+    </div>
+  </div>
+  <div style="text-align:right;font-size:12px;color:#6b7280;margin:-8px 0 20px">Total received into the till today: <strong style="color:#111">${fmt(totalInToday)}</strong></div>
+
+  <div class="section-label">All-Time Overview</div>
   <div class="card-grid" style="grid-template-columns:repeat(3,1fr)">
     ${[
-      {label:"Total Revenue",value:fmt(totalRev),icon:"💰",c:"#dc0a2d"},
+      {label:"Total Revenue (Completed Sales)",value:fmt(totalRev),icon:"💰",c:"#dc0a2d"},
       {label:"Gross Profit", value:fmt(gross),   icon:"📈",c:"#0e9f6e"},
       {label:"Receipts Issued",value:receipts.length,icon:"🧾",c:"#1a56db"},
     ].map(c=>`
@@ -1439,11 +2227,11 @@ function pageReports(){
       </div>`).join("")}
   </div>
   <div class="chart-box" style="margin-bottom:18px">
-    <div class="chart-title">📊 Weekly Sales Trend</div>
+    <div class="chart-title">📊 Last 7 Days — Completed Sales</div>
     <div class="bar-chart">
-      ${days.map((d,i)=>`
+      ${dayLabels.map((d,i)=>`
         <div class="bar-wrap">
-          <div class="bar-val">R${(dayVals[i]/1000).toFixed(1)}k</div>
+          <div class="bar-val">${dayVals[i]>0?"R"+(dayVals[i]/1000).toFixed(1)+"k":"—"}</div>
           <div class="bar" style="height:${Math.round((dayVals[i]/maxV)*80)+4}px"></div>
           <div class="bar-label">${d}</div>
         </div>`).join("")}
@@ -1459,13 +2247,13 @@ function pageReports(){
     </div>
     <div class="panel">
       <div class="panel-head">🏆 Best Selling Products</div>
-      ${bestSellers.map((p,i)=>{
-        const unitsSold=sales.filter(s=>s.items[0]?.product===p.name).reduce((x,s)=>x+s.items[0].qty,0);
-        return `<div class="alert-row">
+      ${bestSellers.length===0?`<p style="color:#9ca3af;font-size:12px;text-align:center;padding:16px">No sales yet.</p>`:
+        bestSellers.map(([name,qty],i)=>`
+        <div class="alert-row">
           <span style="font-weight:800;color:#dc0a2d;width:20px">${i+1}</span>
-          <span style="flex:1;font-weight:500">${p.name}</span>
-          <span class="badge">${unitsSold} sold</span>
-        </div>`;}).join("")}
+          <span style="flex:1;font-weight:500">${name}</span>
+          <span class="badge">${qty} sold</span>
+        </div>`).join("")}
     </div>
   </div>
   <div class="two-col">
@@ -1476,6 +2264,7 @@ function pageReports(){
         <tr><td><strong>${p.name}</strong></td><td>${p.cat}</td><td>${p.stock}</td>
         <td><span class="badge ${p.stock<=3?'red':'yellow'}">${p.stock<=3?"Critical":"Low"}</span></td></tr>`).join("")}
       </tbody></table>
+      ${products.filter(p=>p.stock<=6).length===0?`<p style="color:#9ca3af;font-size:12px;text-align:center;padding:16px">Stock levels all healthy.</p>`:""}
     </div>
     <div class="panel">
       <div class="panel-head">🚚 Delivery Summary</div>
@@ -1487,6 +2276,13 @@ function pageReports(){
           <span class="badge ${s==="Delivered"?"green":s==="Pending"?"yellow":"red"}">${cnt} deliveries</span>
         </div>`;}).join("")}
     </div>
+  </div>
+  <div class="panel" style="margin-top:18px">
+    <div class="panel-head"><span>⏳ Lay-by Book</span></div>
+    <div class="grid-2">
+      <div class="alert-row"><span style="flex:1">Pending Lay-bys</span><span class="badge yellow">${laybys.filter(l=>l.status==="Pending").length}</span></div>
+      <div class="alert-row"><span style="flex:1">Outstanding Balance (all pending)</span><span class="badge red">${fmt(laybys.filter(l=>l.status==="Pending").reduce((a,l)=>a+l.outstandingBalance,0))}</span></div>
+    </div>
   </div>`;
 }
 
@@ -1497,7 +2293,7 @@ function pageTeam(){
   return `
   <div class="panel-brand" style="margin-bottom:10px">Team & Access</div>
   <div style="background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#9a5b1a;display:flex;align-items:center;gap:8px">
-    🚧 Demo mode — staff added here exist only for this session. Once connected to Supabase, this becomes real, permanent login accounts with emailed invites.
+    🔐 Real, permanent accounts. Adding someone here creates their actual login — share the temporary password with them however you like, and they'll set their own password the moment they sign in.
   </div>
   <div class="toolbar">
     <span style="color:#6b7280;font-size:13px">${staffAccounts.length} people with access</span>
@@ -1513,8 +2309,8 @@ function pageTeam(){
         <td>${a.mustChangePassword?`<span class="badge yellow">Pending first login</span>`:`<span class="badge green">Active</span>`}</td>
         <td>
           ${currentUser.role==="owner" && a.id!==currentUser.id ? `
-            <button class="btn-icon" onclick="resetStaffPassword(${a.id})" title="Reset Password">🔁</button>
-            <button class="btn-icon" onclick="removeStaff(${a.id})" title="Remove Access">🗑️</button>
+            <button class="btn-icon" onclick="resetStaffPassword('${a.id}')" title="Reset Password">🔁</button>
+            <button class="btn-icon" onclick="removeStaff('${a.id}')" title="Remove Access">🗑️</button>
           ` : `<span style="color:#9ca3af;font-size:11px">—</span>`}
         </td>
       </tr>`).join("")}
@@ -1539,33 +2335,56 @@ function openAddStaffModal(){
   </div>`;
 }
 
-function genTempPassword(){ return Math.random().toString(36).slice(-4)+Math.floor(100+Math.random()*900); }
+async function callManageStaff(payload){
+  const {data,error}=await sb.functions.invoke("manage-staff",{body:payload});
+  if(error){
+    let msg=error.message;
+    try{ const ctx=await error.context.json(); if(ctx.error) msg=ctx.error; }catch(e){}
+    throw new Error(msg);
+  }
+  if(data && data.error) throw new Error(data.error);
+  return data;
+}
 
-function addStaff(){
+async function addStaff(){
   const name=v("stName").trim(), email=v("stEmail").trim().toLowerCase();
   if(!name||!email){ toast("Please enter a name and email","error"); return; }
   if(staffAccounts.find(a=>a.email.toLowerCase()===email)){ toast("That email already has access","error"); return; }
-  const temp=genTempPassword();
-  staffAccounts=[...staffAccounts,{id:Date.now(),name,email,password:temp,role:"staff",mustChangePassword:true}];
-  closeModal(); renderPage();
-  showCredentialModal(name,email,temp,"created");
+  try{
+    const result=await callManageStaff({action:"invite",name,email});
+    closeModal();
+    await reloadStaffAccounts();
+    renderPage();
+    showCredentialModal(name,email,result.tempPassword,"created");
+  }catch(err){
+    toast("Couldn't add staff member: "+err.message,"error");
+  }
 }
 
-function resetStaffPassword(id){
+async function resetStaffPassword(id){
   const a=staffAccounts.find(x=>x.id===id);
   if(!confirm(`Reset ${a.name}'s password? Their current password will stop working immediately.`)) return;
-  const temp=genTempPassword();
-  staffAccounts=staffAccounts.map(x=>x.id===id?{...x,password:temp,mustChangePassword:true}:x);
-  renderPage();
-  showCredentialModal(a.name,a.email,temp,"reset");
+  try{
+    const result=await callManageStaff({action:"reset",userId:id});
+    await reloadStaffAccounts();
+    renderPage();
+    showCredentialModal(a.name,a.email,result.tempPassword,"reset");
+  }catch(err){
+    toast("Couldn't reset password: "+err.message,"error");
+  }
 }
 
-function removeStaff(id){
+async function removeStaff(id){
   const a=staffAccounts.find(x=>x.id===id);
   if(!confirm(`Remove ${a.name}'s access? They won't be able to log in anymore.`)) return;
-  staffAccounts=staffAccounts.filter(x=>x.id!==id);
-  toast(`${a.name}'s access removed`,"success");
-  renderPage();
+  try{
+    await callManageStaff({action:"remove",userId:id});
+    await reloadStaffAccounts();
+    toast(`${a.name}'s access removed`,"success");
+    renderPage();
+  }catch(err){
+    toast("Couldn't remove access: "+err.message,"error");
+  }
 }
 
 function showCredentialModal(name,email,temp,mode){
@@ -1601,6 +2420,10 @@ function pageSettings(){
       <div class="form-row"><label class="form-label">Phone Number</label><input class="form-input" id="setPhone" value="${settings.phone}"></div>
       <div class="form-row"><label class="form-label">Email Address</label><input class="form-input" id="setEmail" value="${settings.email}"></div>
       <div class="form-row"><label class="form-label">Physical Address</label><input class="form-input" id="setAddr" value="${settings.address}"></div>
+      <div class="grid-2">
+        <div class="form-row"><label class="form-label">Business VAT Number</label><input class="form-input" id="setVatNum" value="${settings.vatNumber}" placeholder="Leave blank if not VAT registered"></div>
+        <div class="form-row"><label class="form-label">VAT Rate (%)</label><input class="form-input" type="number" id="setVatRate" value="${settings.vatRate}"></div>
+      </div>
       <button class="btn-red" onclick="saveSettings()">✓ Save Settings</button>
     </div>
 
@@ -1614,19 +2437,39 @@ function pageSettings(){
   </div>`;
 }
 
-function changeLoginDetails(){
+async function changeLoginDetails(){
   const email=v("cldEmail").trim(), pass=v("cldPass");
   if(!email){ toast("Email can't be empty","error"); return; }
   if(pass && pass.length<6){ toast("Password must be at least 6 characters","error"); return; }
-  staffAccounts=staffAccounts.map(a=>a.id===currentUser.id?{...a,email,password:pass||a.password}:a);
-  currentUser=staffAccounts.find(a=>a.id===currentUser.id);
-  toast("Login details updated. In a real Supabase account, a confirmation email would be sent to the new address.","success");
-  enterApp();
+
+  const updatePayload={};
+  if(email && email.toLowerCase()!==currentUser.email.toLowerCase()) updatePayload.email=email;
+  if(pass) updatePayload.password=pass;
+
+  if(Object.keys(updatePayload).length===0){ toast("Nothing to update","error"); return; }
+
+  const {data,error}=await sb.auth.updateUser(updatePayload);
+  if(error){ toast("Couldn't update login details: "+error.message,"error"); return; }
+
+  // Note: if the email changed, the real auth email only updates once the confirmation link is
+  // clicked — profiles.email will self-correct automatically the next time this account logs in.
+  currentUser.email=email;
+
+  if(updatePayload.email){
+    toast("A confirmation email has been sent to "+email+". Click the link in that email to finish switching the login over.","success");
+  } else {
+    toast("Password updated","success");
+  }
+  renderPage();
 }
 
-function saveSettings(){
-  settings.name=v("setBizName"); settings.phone=v("setPhone");
-  settings.email=v("setEmail");  settings.address=v("setAddr");
+async function saveSettings(){
+  const vatRate=+v("setVatRate");
+  if(!vatRate || vatRate<0){ toast("Please enter a valid VAT rate","error"); return; }
+  const d={name:v("setBizName"),phone:v("setPhone"),email:v("setEmail"),address:v("setAddr"),vat_number:v("setVatNum"),vat_rate:vatRate};
+  const {error}=await sb.from("settings").update(d).eq("id",1);
+  if(error){ toast("Couldn't save settings: "+error.message,"error"); return; }
+  settings={name:d.name,phone:d.phone,email:d.email,address:d.address,vatNumber:d.vat_number,vatRate:d.vat_rate};
   toast("Settings saved successfully","success");
   renderPage();
 }
@@ -1638,7 +2481,11 @@ $("dateChip").textContent=new Date().toLocaleDateString("en-ZA",{day:"numeric",m
 ["loginEmail","loginPassword"].forEach(id=>{
   $(id).addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
 });
-// App content (renderNav/renderPage) is drawn once enterApp() runs after a successful login.
+// If there's already a valid, signed-in session (browser remembers it), skip straight past the login screen.
+(async()=>{
+  const {data}=await sb.auth.getSession();
+  if(data.session){ await loadCurrentUserProfile(data.session.user); }
+})();
 </script>
 
 </body>

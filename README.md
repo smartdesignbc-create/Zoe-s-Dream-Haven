@@ -1,42 +1,56 @@
 # Zoe's Dream Haven — Operations Dashboard
 
-A single-page business dashboard for Zoe's Dream Haven: inventory, sales, receipts, delivery notes, customers, suppliers, reports, and staff login access — all in one lightweight `index.html` file.
+A complete, cloud-backed business dashboard for Zoe's Dream Haven: inventory across two locations, sales, lay-bys, PDF receipts, deliveries, customers, suppliers, reports, and secure link-based access — all in one `index.html` file, fully connected to a live Supabase backend.
 
-## What's in this version
+## What this system does
 
-- **Top tab-bar navigation** — everything readable top to bottom, no side menu to open. Primary tabs (Dashboard, Sales, Inventory, Receipts, Deliveries, Customers) sit up front; Suppliers, Reports, Team & Access, and Settings live under **More**.
-- **Simplified Dashboard** — only the numbers that matter day to day (Today's Sales, Pending Deliveries, Low Stock), 3 quick actions, recent sales, and alerts. Deeper stats and charts moved to **Reports**.
-- **Delivery Notes** — every delivery captures customer name, surname, cell number, and address, and produces a printable Delivery Note with signature lines. Create one directly from a Receipt with one click.
-- **Login screen** — the whole app is gated behind sign-in. See **Login & Access** below.
-- **Full data flow** — a sale deducts stock, saves/updates the customer, generates a receipt, and can spin off a linked delivery note.
-- **Toast notifications** — no browser pop-ups; confirmations and errors appear as clean on-screen messages.
+- **Two-location Inventory** — Main Shop (where all supplier stock arrives) and a separate Warehouse, with one-click stock transfers between them, fully logged.
+- **Pricing engine** — enter Trade Price + Markup, and Selling Price, VAT, and Total Selling Price calculate automatically. Nobody does this math by hand.
+- **Sales** — full item cart, manual price override per line (with the original price kept for records), auto-updates inventory, auto-creates the customer record, auto-generates a receipt.
+- **Lay-by Sales** — a simple checkbox on the Sales screen. Takes a deposit, holds stock until fully paid, accepts top-up payments, and completes automatically (deducting stock and generating the final receipt) the moment the balance hits zero.
+- **PDF Receipts** — every receipt (sales, lay-by deposits/payments, completed lay-bys) can generate a real downloadable PDF, with full business and customer details, VAT breakdown, and line items — nothing retyped.
+- **Email / WhatsApp Receipt buttons** — built and wired to real backend functions, ready to go live the moment a production email/WhatsApp account is connected (see "Going Live" below).
+- **Delivery Notes** — pull straight from a sale or lay-by, complete with customer details and a printable note with signature lines.
+- **Reports** — leads with today's Completed Sales, Lay-by Deposits Received, and Completed Lay-bys, plus an all-time overview, trends, and stock alerts.
+- **Secure, permanent login** — see "Access & Security" below.
 
-## Login & Access (current state — demo mode)
+## Access & Security
 
-This build includes a **working login screen**, but accounts are currently stored in memory in the browser (they reset on page refresh). This is intentional — it's the UI and flow the client approved, ready to be wired to real, permanent accounts.
+This system uses a **Master + Share Access** model, not usernames/passwords handed out manually:
 
-**Demo login:**
-- Email: `admin@demo.com`
-- Password: `admin123`
+- **You (the developer) are the permanent Master account.** Full control, always. You're the only one who can grant or revoke access.
+- To give someone access (the shop owner, staff, anyone), go to **More → Share Access → Generate Share Link**, and send that link however you like (WhatsApp, SMS, etc.).
+- The moment they open it, they set up their **own** name, email, and password and are instantly logged in — no email confirmation step, no waiting.
+- You can revoke anyone's access at any time from the same screen.
+- Nobody sees "Owner" or "Staff" labels — it's simply people with access, managed by you.
 
-**How it will work once connected to Supabase (next phase):**
-1. You keep a permanent developer/support login, separate from the client's.
-2. At handover, you use **Settings → Change Login Details** to switch the owner-level account to the client's own email and password, in front of them.
-3. From **Team & Access**, the owner can add staff members (each gets a temporary password to share), reset anyone's password, or remove access — all without your involvement.
-4. Your own login stays active permanently, so you can log in and confirm any issue the client reports before touching any code.
+This means: if a client calls with a problem, you don't need them to grant you anything — you already have permanent access and can log in and check it yourself immediately.
 
-See `DEPLOYMENT.md` for the full rollout plan, including the Supabase phase.
+## Tech stack
 
-## Tech notes
+- Single file: `index.html` — no build step. Deploys as-is to Vercel, Netlify, GitHub Pages, or any static host.
+- **Supabase** — Postgres database, Auth, and two Edge Functions (`redeem-invite`, `manage-staff`) power everything. All data is real and permanent.
+- **jsPDF** (via CDN) generates receipts client-side — no server needed for that part.
+- Row Level Security is enabled on every table — only signed-in accounts can read or write data.
 
-- Single file: `index.html` — no build step, no dependencies. Works as-is on GitHub Pages, Vercel, Netlify, or any static host.
-- All data (products, sales, customers, receipts, deliveries, staff accounts) currently lives in memory in the browser and resets on refresh. This is expected at this stage — persistent storage (Supabase) is the next phase.
-- Branding, colors, and business name are unchanged from the version the client approved.
+## Going live with Email / WhatsApp receipts
+
+Both buttons work end-to-end already — they just need real credentials plugged in as Supabase secrets (no code changes required):
+
+- **Email:** create a free [Resend.com](https://resend.com) account → add `RESEND_API_KEY` as a secret on the `send-receipt-email` function.
+- **WhatsApp:** create a Twilio account with WhatsApp enabled → add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` as secrets on the `send-receipt-whatsapp` function.
+
+Until then, clicking either button shows a clear message explaining what's needed — never a fake "sent" confirmation.
 
 ## Project structure
 
 ```
-index.html      → the entire application (HTML + CSS + JS)
-README.md       → this file
-DEPLOYMENT.md   → step-by-step rollout: GitHub → Vercel → Supabase
+index.html   → the entire application (HTML + CSS + JS), connected to Supabase
+README.md    → this file
 ```
+
+## Supabase project
+
+- Project: `zoes-dream-haven`
+- Tables: `settings`, `profiles`, `suppliers`, `products`, `customers`, `sales`, `receipts`, `deliveries`, `stock_transfers`, `laybys`, `layby_payments`, `invites`
+- Edge Functions: `redeem-invite`, `manage-staff`, `send-receipt-email`, `send-receipt-whatsapp`

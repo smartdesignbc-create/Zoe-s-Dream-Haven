@@ -898,6 +898,7 @@ function fillSaleCustomer(){
   const c=customers.find(x=>x.name.toLowerCase()===v("sCust").trim().toLowerCase());
   if($("sSurname")) $("sSurname").value = c ? (c.surname||"") : "";
   if($("sCustPhone")) $("sCustPhone").value = c ? (c.phone||"") : "";
+  if($("sCustVat")) $("sCustVat").value = c ? (c.vatNumber||"") : "";
 }
 
 function openSaleModal(){
@@ -920,7 +921,10 @@ function openSaleModal(){
           </div>
           <div class="form-row"><label class="form-label">Surname</label><input class="form-input" id="sSurname" placeholder="Auto-fills if saved"></div>
         </div>
-        <div class="form-row"><label class="form-label">Phone Number</label><input class="form-input" id="sCustPhone" placeholder="e.g. 071 234 5678"></div>
+        <div class="grid-2">
+          <div class="form-row"><label class="form-label">Phone Number</label><input class="form-input" id="sCustPhone" placeholder="e.g. 071 234 5678"></div>
+          <div class="form-row"><label class="form-label">Customer VAT Number (Optional)</label><input class="form-input" id="sCustVat" placeholder="For business customers"></div>
+        </div>
 
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#9a5b1a;cursor:pointer;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;padding:12px 14px;margin:14px 0 0">
           <input type="checkbox" id="sIsLayby" onchange="toggleLaybyMode()" style="width:16px;height:16px">
@@ -1063,6 +1067,7 @@ async function saveLaybySale(){
   const custName=v("sCust").trim()||"Walk-in";
   const custSurname=v("sSurname").trim();
   const custPhone=v("sCustPhone").trim();
+  const custVat=v("sCustVat").trim();
   const method=v("sMethod");
   const saveBtn=$("sSaveBtn");
   if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent="Saving…"; }
@@ -1086,9 +1091,9 @@ async function saveLaybySale(){
 
     const existingCust=customers.find(c=>c.name.toLowerCase()===custName.toLowerCase());
     if(existingCust){
-      await sb.from("customers").update({surname:custSurname||existingCust.surname,phone:custPhone||existingCust.phone}).eq("id",existingCust.id);
+      await sb.from("customers").update({surname:custSurname||existingCust.surname,phone:custPhone||existingCust.phone,vat_number:custVat||existingCust.vatNumber}).eq("id",existingCust.id);
     } else if(custName!=="Walk-in"){
-      await sb.from("customers").insert({name:custName,surname:custSurname,phone:custPhone,address:"",email:""});
+      await sb.from("customers").insert({name:custName,surname:custSurname,phone:custPhone,vat_number:custVat,address:"",email:""});
     }
     await reloadTable("customers");
 
@@ -1181,6 +1186,7 @@ async function saveSale(){
   const custName=v("sCust").trim()||"Walk-in";
   const custSurname=v("sSurname").trim();
   const custPhone=v("sCustPhone").trim();
+  const custVat=v("sCustVat").trim();
   const saleDate=v("sDate");
   const grandTotal=saleCart.reduce((a,it)=>a+it.qty*it.price,0);
 
@@ -1207,12 +1213,12 @@ async function saveSale(){
       if(updErr) throw updErr;
     }
 
-    // 2) Save / update Customer record (name, surname, phone all carried through)
+    // 2) Save / update Customer record (name, surname, phone, VAT number all carried through)
     const existingCust=customers.find(c=>c.name.toLowerCase()===custName.toLowerCase());
     if(existingCust){
-      await sb.from("customers").update({surname:custSurname||existingCust.surname,phone:custPhone||existingCust.phone}).eq("id",existingCust.id);
+      await sb.from("customers").update({surname:custSurname||existingCust.surname,phone:custPhone||existingCust.phone,vat_number:custVat||existingCust.vatNumber}).eq("id",existingCust.id);
     } else if(custName!=="Walk-in"){
-      await sb.from("customers").insert({name:custName,surname:custSurname,phone:custPhone,address:"",email:""});
+      await sb.from("customers").insert({name:custName,surname:custSurname,phone:custPhone,vat_number:custVat,address:"",email:""});
     }
     await reloadTable("customers");
 
@@ -1436,10 +1442,8 @@ function viewReceipt(id){
           <button class="btn-red" style="flex:1;justify-content:center" onclick="downloadReceiptPDF(${id})">📄 Download PDF</button>
           <button class="btn-black" style="flex:1;justify-content:center" onclick="printReceipt(${id})">🖨️ Print</button>
         </div>
-        <div style="display:flex;gap:10px;margin-top:10px">
-          <button class="btn-outline" style="flex:1;justify-content:center" onclick="emailReceipt(${id})">📧 Email Receipt</button>
-          <button class="btn-outline" style="flex:1;justify-content:center" onclick="whatsappReceipt(${id})">💬 WhatsApp Receipt</button>
-        </div>
+        <button class="btn-outline" style="width:100%;justify-content:center;margin-top:10px" onclick="whatsappReceipt(${id})">💬 Share on WhatsApp</button>
+        <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:6px">On a phone this attaches automatically. On a laptop, it downloads the PDF and opens the customer's WhatsApp chat — just attach the file and hit send. To email a receipt, download the PDF above and attach it in your email as usual.</div>
         <button class="btn-outline" style="width:100%;justify-content:center;margin-top:10px" onclick="closeModal()">Close</button>
       </div>
     </div>
@@ -1525,11 +1529,28 @@ function buildReceiptPDF(r){
   return doc;
 }
 
+// Manually builds the download instead of relying on jsPDF's built-in .save(), which can
+// misbehave on some mobile/Android browsers and produce a corrupted or empty file.
+function downloadPDFBlob(doc, filename){
+  const blob=doc.output("blob");
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
 function downloadReceiptPDF(id){
   const r=receipts.find(x=>x.id===id);
   if(!r){ toast("That receipt could no longer be found","error"); return; }
-  const doc=buildReceiptPDF(r);
-  doc.save(`Receipt-${r.num}.pdf`);
+  try{
+    const doc=buildReceiptPDF(r);
+    downloadPDFBlob(doc, `Receipt-${r.num}.pdf`);
+  }catch(err){
+    toast("Couldn't create the PDF: "+err.message,"error");
+  }
 }
 
 function receiptPDFBase64(r){
@@ -1538,50 +1559,43 @@ function receiptPDFBase64(r){
   return uri.substring(uri.indexOf("base64,")+7);
 }
 
-async function emailReceipt(id){
-  const r=receipts.find(x=>x.id===id);
-  if(!r){ toast("That receipt could no longer be found","error"); return; }
-  if(!r.email){ toast("This customer has no email address saved. Add one under Customers, then try again.","error"); return; }
-  toast("Sending email…");
-  try{
-    const pdfBase64=receiptPDFBase64(r);
-    const {data,error}=await sb.functions.invoke("send-receipt-email",{body:{
-      to:r.email, businessName:settings.name, customerName:[r.customer,r.surname].filter(Boolean).join(" "),
-      receiptNum:r.num, pdfBase64
-    }});
-    if(error) throw error;
-    if(data.configured===false){
-      toast(data.message,"error");
-    } else if(data.success){
-      toast(`Receipt emailed to ${r.email}`,"success");
-    } else {
-      toast(data.error||"Something went wrong sending the email","error");
-    }
-  }catch(err){
-    toast("Couldn't send email: "+err.message,"error");
-  }
+// Formats a South African phone number for a wa.me link (needs digits only, country code, no leading 0).
+function formatPhoneForWhatsApp(phone){
+  let digits=(phone||"").replace(/\D/g,"");
+  if(digits.startsWith("0")) digits="27"+digits.slice(1);
+  else if(!digits.startsWith("27")) digits="27"+digits;
+  return digits;
 }
 
+// On mobile, WhatsApp plugs into the device's own Share menu, so this can be a genuine one-tap send.
+// On a laptop running WhatsApp Web/Desktop, no website is allowed to auto-attach and send a file for
+// you — that's a deliberate WhatsApp security restriction, not a limitation of this app. So on a
+// laptop this instead downloads the PDF AND opens WhatsApp straight into the right customer's chat,
+// leaving one small manual step: attach the file that just downloaded, then hit send.
 async function whatsappReceipt(id){
   const r=receipts.find(x=>x.id===id);
   if(!r){ toast("That receipt could no longer be found","error"); return; }
-  if(!r.phone){ toast("This customer has no phone number saved. Add one under Customers, then try again.","error"); return; }
-  toast("Sending WhatsApp message…");
-  try{
-    const {data,error}=await sb.functions.invoke("send-receipt-whatsapp",{body:{
-      to:r.phone, businessName:settings.name, customerName:[r.customer,r.surname].filter(Boolean).join(" "),
-      receiptNum:r.num, total:r.total
-    }});
-    if(error) throw error;
-    if(data.configured===false){
-      toast(data.message,"error");
-    } else if(data.success){
-      toast(`WhatsApp message sent to ${r.phone}`,"success");
-    } else {
-      toast(data.error||"Something went wrong sending the WhatsApp message","error");
+  const doc=buildReceiptPDF(r);
+  const fileName=`Receipt-${r.num}.pdf`;
+
+  const blob=doc.output("blob");
+  const file=new File([blob],fileName,{type:"application/pdf"});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({files:[file], title:`Receipt ${r.num}`, text:`Receipt ${r.num} from ${settings.name}`});
+      return;
+    }catch(err){
+      if(err.name==="AbortError") return; // they closed the share menu on purpose
+      // otherwise fall through to the laptop flow below
     }
-  }catch(err){
-    toast("Couldn't send WhatsApp message: "+err.message,"error");
+  }
+
+  downloadPDFBlob(doc, fileName);
+  if(r.phone){
+    window.open(`https://wa.me/${formatPhoneForWhatsApp(r.phone)}`,"_blank");
+    toast("Receipt downloaded, and WhatsApp is opening to this customer's chat — attach the file you just downloaded, then hit send.","success");
+  } else {
+    toast("Receipt downloaded. This customer has no phone number saved, so open WhatsApp and attach it manually.","error");
   }
 }
 
